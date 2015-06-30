@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>{{ title }}</title> 
+    </head>
+    <body>
+        {% if data %}
+        <table>
+            <thead>
+                {% for column in columns %}
+                <th>{{ column }}</th>
+                {% endfor %}
+            </thead>
+            {% for line in data %}
+            <tr>
+                {% for column in columns %}
+                <th>{{ line[column] }}</th>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <h3>No data available</h3>
+        {% endif %}
+        <p><a href="/view/">Return to monitoring</a></p>
+    </body>
+    <style>
+     table {
+         margin-top: 50px;
+         border-collapse: collapse;
+     }
+     th {
+         font-size: large;
+         padding: 5px;
+         border: 1px solid black;
+     }
+     td {
+         padding: 5px;
+         border: 1px solid black;
+     }
+    </style>
+</html>

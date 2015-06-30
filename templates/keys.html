@@ -1,0 +1,57 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <title>{{ title }}</title> 
+    </head>
+    <body>
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        {% for message in messages %}
+        <p>{{ message }}</p>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+        <form action="/keys/create/" method="post">
+            <label for="number_players">Number of players</label>
+            <input id="number_players" name="number_players">
+            <button>Create keys!</button>
+        </form>
+        {% if sessions %}
+        <table>
+            <thead>
+                <th>Session number</th>
+                <th>Number of players</th>
+                <th>View</th>
+                <th>Print</th>
+            </thead>
+            {% for session in sessions %}
+            <tr>
+                <td>{{ session[0] }}</td>
+                <td>{{ session[1] }}</td>
+                <td><a href="/keys/{{ session[0] }}" target="_blank">View keys</a></td>
+                <td><a href="/keys/print/{{ session[0] }}">Print keys</a></td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <h3>No data available</h3>
+        {% endif %}
+        <p><a href="/view/">Return to monitoring</a></p>
+    </body>
+    <style>
+     table {
+         margin-top: 50px;
+         border-collapse: collapse;
+     }
+     th {
+         font-size: large;
+         padding: 5px;
+         border: 1px solid black;
+     }
+     td {
+         padding: 5px;
+         border: 1px solid black;
+     }
+    </style>
+</html>
