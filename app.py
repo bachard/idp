@@ -21,9 +21,9 @@ app.ext = False
 app.lock_connections = Lock()
 app.lock_players = Lock()
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/', methods=["GET"])
 def index():
-    return request.method
+    return redirect(url_for("view_index"))
 
 @app.route("/identification/", methods=["POST"])
 def indentification():
@@ -40,7 +40,7 @@ def indentification():
                 db_session.commit()
                 return jsonify(status=1, data={"player_id": player.id}, text="Identification successful...")
             else:
-                return jsonify(status=0, text="Key already in use! Please enter another key.")
+                return jsonify(status=-1, data={"player_id": player.id}, text="Key already in use!\nPlease enter another key...")
             
         except NoResultFound as e:
             return jsonify(status=0, text="You entered a wrong key! Try again...")
@@ -81,7 +81,7 @@ def connect():
         thread.start()
         return jsonify(status=1, data=conn_id, text="Added to available players...")
     except NoResultFound:
-        return jsonify(satus=0, data=None, text="The player does not exists!")
+        return jsonify(satus=0, data=None, text="This player does not exists!")
     except Exception as e:
         print(e)
         return jsonify(satus=-1, data=None, text="Server error...")
@@ -180,14 +180,16 @@ def disconnect(player_id):
     try:
         player = Player.query.get(player_id)
         conn = player.connection
+        player.in_use = 0
         if conn is None:
             return jsonify(status=1, data=None, text="Player not connected.")
         else:
             db_session.delete(conn)
-            connected_player_conn = player.connection_other
-            connected_player_conn.connected_player_id = None
-            connected_player_conn.role = None
-            connected_player_conn.status = 0
+            if player.connection_other:
+                connected_player_conn = player.connection_other
+                connected_player_conn.connected_player_id = None
+                connected_player_conn.role = None
+                connected_player_conn.status = 0
             db_session.commit()
             return jsonify(status=1, data=None, text="Player disconnected.")
     except NoResultFound as e:
@@ -220,28 +222,65 @@ def upload_json():
         else:
             print("No JSON")
             return "No JSON data was sent!", 400
-        # process/filter
-        # add to db
-        
     else:
         return "Only POST requests are accepted.", 400
 
+    
 @app.route("/view/")
 def view_index():
-    return render_template("index.html")
+    return render_template("index.djhtml", title="Monitoring")
+
+
 
 @app.route("/view/connections/")
 def view_connections():
     columns = [c.name for c in Connection.__table__.columns]
     connections = db_session.query(Connection).all()
-    return render_template("view_data.html", title="Connections", columns=columns, data=connections)
+    return render_template("view_data.djhtml", title="Connections", columns=columns, data=connections)
+
+
 
 @app.route("/view/sessions/")
 def view_sessions():
-    s = ""
-    for session in db_session.query(Session).all():
-        s += str(session) + "\n"
-    return s.replace("\n", "<br />").replace("    ", "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;")
+    columns = [c.name for c in Session.__table__.columns]
+    columns.append("view_tests")
+    sessions = db_session.query(Session).all()
+    [setattr(session, "view_tests", "/view/tests/{}".format(session.id)) for session in sessions]
+    
+    return render_template("view_data.djhtml", title="Sessions", columns=columns, data=sessions)
+
+
+
+@app.route("/view/tests/<int:session_id>")
+def view_tests(session_id):
+    columns = [c.name for c in Test.__table__.columns]
+    columns.append("view_stats")
+    columns.append("view_items")
+    tests = db_session.query(Test).filter_by(session_id=session_id).all()
+    [setattr(test, "view_stats", "/view/stats/{}".format(test.id)) for test in tests]
+    [setattr(test, "view_items", "/view/items/{}".format(test.id)) for test in tests]   
+    return render_template("view_data.djhtml", title="Tests for session {}".format(session_id), columns=columns, data=tests, back="/view/sessions/")
+
+
+@app.route("/view/stats/<int:test_id>")
+def view_stats(test_id):
+    columns = [c.name for c in Stat.__table__.columns]
+    stats = db_session.query(Stat).filter_by(test_id=test_id).all()
+    for stat in stats:
+        stat.position_over_time = {k: json.loads(v) for (k,v) in json.loads(stat.position_over_time).items()}
+    session_id = db_session.query(Test).get(test_id).session_id
+    return render_template("view_data.djhtml", title="Stats for test {}".format(test_id), columns=columns, data=stats, back="/view/tests/{}".format(session_id))
+
+
+@app.route("/view/items/<int:test_id>")
+def view_items(test_id):
+    columns = [c.name for c in Item.__table__.columns]
+    items = db_session.query(Item).filter_by(test_id=test_id).all()
+    session_id = db_session.query(Test).get(test_id).session_id
+    return render_template("view_data.djhtml", title="Items for test {}".format(test_id), columns=columns, data=items, back="/view/tests/{}".format(session_id))
+
+
+
 
 @app.route("/view/sessions/csv/")
 def view_sessions_csv():
@@ -253,19 +292,13 @@ def view_sessions_csv():
 @app.route("/keys/")
 def keys():
     sessions = [s for s in db_session.query(Player.session_nr, func.count(Player.pair)).group_by(Player.session_nr).all()]
-    return render_template("keys.html", title="Manage keys", sessions=sessions)
+    return render_template("keys.djhtml", title="Manage keys", sessions=sessions)
 
 @app.route("/keys/<int:session_nr>")
 def view_keys(session_nr):
-    s = ""
-    try:
-        for player in db_session.query(Player).filter_by(session_nr=session_nr).all():
-            s += "<p>{}</p>".format(player)
-    except Exception as e:
-        s = str(e)
-    finally:
-        return s
-            
+    columns = [c.name for c in Player.__table__.columns]
+    players = db_session.query(Player).filter_by(session_nr=session_nr).all()
+    return render_template("view_data.djhtml", title="Keys for session {}".format(session_nr), columns=columns, data=players, back="/keys/")
 
 @app.route("/keys/create/", methods=["POST"])
 def create_keys():
@@ -321,8 +354,10 @@ def add_stats_to_db(data):
     world = data['world']
     round = data['round']
     player_id = data['player']
-    stats = data['stats']
-
+    stats = json.loads(data['stats'])
+    position_over_time = data['position_over_time']
+    checkpoints = data['checkpoints']
+    
     # try to find if the session has already been created
     # if not: create a new one
     try:
@@ -348,6 +383,12 @@ def add_stats_to_db(data):
         test.stats.append(stat)
 
     items = []
+
+    stat.position_over_time = json.dumps(position_over_time)
+    stat.checkpoints = json.dumps(checkpoints)
+    
+    print(test)
+    print(stats)
         
     for (k,v) in stats.items():
         k = k.split('.')
@@ -364,10 +405,11 @@ def add_stats_to_db(data):
                 try:
                     item = db_session.query(Item).filter_by(test_id=test.id, player_id=player_id, item=item_id).one()
                 except:
+                    print(test)
                     item = Item(test.id, player_id)
                     test.items.append(item)
                     setattr(item, 'item', item_id)
-            
+                    
                 setattr(item, column, v)
             else:
                 # only adds statistics defined in db

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, LargeBinary
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime
@@ -66,6 +66,9 @@ class Stat(Base):
     test_id = Column(Integer, ForeignKey("tests.id"))
     player_id = Column(Integer, ForeignKey("players.id"))
 
+    checkpoints = Column(LargeBinary)
+    position_over_time = Column(LargeBinary)
+    
     play_one_minute = Column(Integer)
     walk_one_cm = Column(Integer)
     swim_one_cm = Column(Integer)
@@ -165,16 +168,17 @@ class Player(Base):
     in_use = Column(Boolean)
     session_nr = Column(Integer)
     pair = Column(Integer)
-
+    setup = Column(Integer)
     
     connection = relationship("Connection", foreign_keys=[Connection.player_id], backref="players", uselist=False, cascade="all, delete, delete-orphan")
     connection_other = relationship("Connection", foreign_keys=[Connection.connected_player_id], uselist=False, cascade="all, delete, delete-orphan")
 
-    def __init__(self, key, name, session_nr, pair):
+    def __init__(self, key, name, session_nr, pair, setup=-1):
         self.key = key
         self.name = name
         self.session_nr = session_nr
         self.pair = pair
+        self.setup = setup
         self.in_use = 0
     
     def __repr__(self):

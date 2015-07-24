@@ -1,0 +1,22 @@
+{% extends "base.djhtml" %}
+
+{% block content %}
+    <section class="row">
+        <div class="col-lg-12">
+            <table>
+            <thead>
+                {% for column in columns %}
+                    <th>{{ column }}</th>
+                {% endfor %}
+            </thead>
+            {% for line in data %}
+                <tr>
+                    {% for column in columns %}
+                        <th>{{ line[column] }}</th>
+                    {% endfor %}
+                </tr>
+            {% endfor %}
+        </table>
+        </div>
+    </section>
+{% endblock %}

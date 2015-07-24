@@ -1,0 +1,12 @@
+{% extends "base.djhtml" %}
+
+{% block content %}
+    <section class="row">
+        <div class="col-lg-4">
+            <p><a href="/view/connections/">View connections</a></p>
+            <p><a href="/view/sessions/">View stats</a></p>
+            <p><a href="/view/sessions/csv" target="_blank">Export stats to CSV</a></p>
+            <p><a href="/keys/">Manage keys</a></p>
+        </div>
+    </section>
+{% endblock %}

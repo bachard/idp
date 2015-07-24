@@ -13,7 +13,7 @@ def read_settings():
         print("Problem reading the settings file!")
         os.system("pause")
         sys.exit()
-    
+
 
 def stats_to_csv():
     from database import db_session

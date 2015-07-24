@@ -19,7 +19,14 @@ class Application(tk.Frame):
         self.grid()
         self.createWidgets()
         self.server_root = "http://{}:{}/".format(self.settings["server"]["address"], self.settings["server"]["port"])
-            
+
+    def destroy(self):
+        if self.player_id is not None:
+            status = -1
+            while status == -1:
+                d = self.get_data("disconnect/{}".format(self.player_id))
+                status = d["status"]
+        tk.Frame.destroy(self)
         
     def createWidgets(self):
         self.field_label = tk.Label(self, text="Enter your key:")
@@ -133,7 +140,6 @@ class Application(tk.Frame):
         self.button_connect["command"] = self.play
         self.button_connect["state"] = tk.NORMAL
         self.field_connect["text"] = ""
-        
         
     
 root = tk.Tk()

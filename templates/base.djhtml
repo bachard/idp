@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        {% block head %}
+            <title>{% block title %}{{ title }} - Minecradt server monitoring{% endblock %}</title>
+            <meta charset="utf-8">
+            <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+        {% endblock %}
+    </head>
+    <body>
+        <div class="container">
+            <header class="page-header">
+                {% block header %}
+                    <h1>{{ title }}</h1>
+                {% endblock %}
+            </header>
+            {% block content %}
+            {% endblock %}
+            <footer>
+                {% block footer %}
+                    IDP by Bastien Achard & Stefan Reu, TUM 2015
+                {% endblock %}
+            </footer>
+        </div>
+    </body>
+</html>
