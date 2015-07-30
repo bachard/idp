@@ -10,13 +10,15 @@ import time
 from random import randint
 from threading import Thread, Lock
 import utils
+# for py2exe
+import jinja2.ext
 
 app = Flask(__name__)
 app.secret_key = 'some_secret'
 
 app.debug = True
 
-app.ext = False
+app.ext = True
 
 app.lock_connections = Lock()
 app.lock_players = Lock()

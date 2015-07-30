@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, LargeBinary
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import relationship, backref
 from datetime import datetime
@@ -66,8 +66,8 @@ class Stat(Base):
     test_id = Column(Integer, ForeignKey("tests.id"))
     player_id = Column(Integer, ForeignKey("players.id"))
 
-    checkpoints = Column(LargeBinary)
-    position_over_time = Column(LargeBinary)
+    checkpoints = Column(Text)
+    position_over_time = Column(Text)
     solution = Column(String(100))
     
     play_one_minute = Column(Integer, default=0)

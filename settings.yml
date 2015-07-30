@@ -2,10 +2,12 @@ server:
     address: 127.0.0.1
     port: 1234
 minecraft:
-    path: /home/bib/.minecraft/launcher.jar
+    path: C:\Users\bib\AppData\Roaming\.minecraft\bin\launcher.jar
     connection_file: player.txt
     server_file: server.txt
 java:
-    path: /usr/bin/java
-database: mysql+pymysql://root:bib@localhost/minecraft
-# database: sqlite:///database.db
+    path: C:\Program Files (x86)\Java\jre7\bin\java.exe
+database: sqlite:///database.db
+#    path: /usr/bin/java
+#    path: /home/bib/.minecraft/launcher.jar
+# database: mysql+pymysql://root:bib@localhost/minecraft

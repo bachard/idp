@@ -4,3 +4,7 @@
 *~
 venv
 *.txt
+app/
+client/
+tests/
+nohup.out
