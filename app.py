@@ -265,9 +265,10 @@ def view_tests(session_id):
 @app.route("/view/stats/<int:test_id>")
 def view_stats(test_id):
     columns = [c.name for c in Stat.__table__.columns]
+    columns.remove("position_over_time")
     stats = db_session.query(Stat).filter_by(test_id=test_id).all()
-    for stat in stats:
-        stat.position_over_time = {k: json.loads(v) for (k,v) in json.loads(stat.position_over_time).items()}
+    # for stat in stats:
+    #     stat.position_over_time = {k: json.loads(v) for (k,v) in json.loads(stat.position_over_time).items()}
     session_id = db_session.query(Test).get(test_id).session_id
     return render_template("view_data.djhtml", title="Stats for test {}".format(test_id), columns=columns, data=stats, back="/view/tests/{}".format(session_id))
 
@@ -275,33 +276,53 @@ def view_stats(test_id):
 @app.route("/view/items/<int:test_id>")
 def view_items(test_id):
     columns = [c.name for c in Item.__table__.columns]
+    columns.remove("id")
+    columns.remove("test_id")
+    columns.remove("item_item")
+    columns.insert(1, "item_id")
+    columns.insert(2, "name")
     items = db_session.query(Item).filter_by(test_id=test_id).all()
+    [setattr(item, "item_id", item.item.item) for item in items]
+    [setattr(item, "name", item.item.name) for item in items]
     session_id = db_session.query(Test).get(test_id).session_id
     return render_template("view_data.djhtml", title="Items for test {}".format(test_id), columns=columns, data=items, back="/view/tests/{}".format(session_id))
 
 
-
+##########################
+# Export all data to CSV #
+##########################
 
 @app.route("/view/sessions/csv/")
 def view_sessions_csv():
     response = make_response(utils.stats_to_csv().getvalue())
-    response.headers["Content-Disposition"] = "attachment; filename=stats.csv"
+    response.headers["Content-Disposition"] = "attachment; filename=stats.txt"
     response.headers["Content-type"] = "text/csv"
     return response
 
-@app.route("/keys/")
-def keys():
+
+
+
+######################
+# Players management #
+######################
+
+@app.route("/players/")
+def players():
     sessions = [s for s in db_session.query(Player.session_nr, func.count(Player.pair)).group_by(Player.session_nr).all()]
-    return render_template("keys.djhtml", title="Manage keys", sessions=sessions)
+    return render_template("players.djhtml", title="Manage players", sessions=sessions)
 
-@app.route("/keys/<int:session_nr>")
-def view_keys(session_nr):
+
+@app.route("/players/<int:session_nr>")
+def view_players(session_nr):
     columns = [c.name for c in Player.__table__.columns]
+    modifiable = ["name", "condition", "player_condition"]
+    action = "/players/update/"
     players = db_session.query(Player).filter_by(session_nr=session_nr).all()
-    return render_template("view_data.djhtml", title="Keys for session {}".format(session_nr), columns=columns, data=players, back="/keys/")
+    return render_template("view_data.djhtml", title="Players for session {}".format(session_nr), id=session_nr, columns=columns, data=players, modifiable=modifiable, action=action, back="/players/")
 
-@app.route("/keys/create/", methods=["POST"])
-def create_keys():
+
+@app.route("/players/create/", methods=["POST"])
+def create_players():
     if "number_players" in request.form:
         try:
             number_players = int(request.form["number_players"])
@@ -317,12 +338,12 @@ def create_keys():
                         while not added:
                             try:
                                 key = '{0:06}'.format(randint(1, 1000000))
-                                db_session.add(Player(key, key, session_nr, int(i/2)))
+                                db_session.add(Player(key, key, session_nr, int(i/2) + 1, 0, i%2 + 1))
                                 db_session.commit()
                                 added = True
                             except Exception as e:
                                 db_session.rollback()
-                    flash("The keys were created! The session number is {}.".format(session_nr))
+                    flash("The players were created! The session number is {}.".format(session_nr))
                 except Exception as e:
                     flash("An exception has occured!<br />Exception message: {}".format(e))
                 
@@ -330,24 +351,65 @@ def create_keys():
             flash("The argument is invalid! You did not pass an integer as parameter...")
     else:
         flash("Invalid form!")
-    return redirect(url_for("keys"))
+    return redirect(url_for("players"))
 
-@app.route("/keys/print/<int:session_number>", methods=["GET"])
-def print_keys(session_number):
+
+@app.route("/players/update/", methods=["POST"])
+def update_player():
+    data = request.get_json(silent=True)
+    print(data);
+    if data:
+        try:
+            for update_player in data["update_players"]:
+                player_id = update_player.pop("id")
+                player = db_session.query(Player).get(player_id)
+                for (attr, value) in update_player.items():
+                    setattr(player, attr, value)
+                    db_session.add(player)
+            db_session.commit()
+            return jsonify(status=1, text="Update successful")
+        except Exception as e:
+            return jsonify(status=-1, data=str(e), text="Exception!")
+    else:
+        return jsonify(status=0, text="No JSON provided!")
+
+
+    
+# We save the file as .txt because MS Excel might not recongnize
+# the separator, opening a .txt file will let the user choose
+@app.route("/players/export/csv/<int:session_number>", methods=["GET"])
+def export_csv_players(session_number):
     try:
         response = make_response(utils.session_to_csv(session_number).getvalue())
-        response.headers["Content-Disposition"] = "attachment; filename=session_{}.csv".format(session_number)
+        response.headers["Content-Disposition"] = "attachment; filename=session_{}.txt".format(session_number)
         response.headers["Content-type"] = "text/csv"
         return response
     except Exception as e:
-        flash("Problem printing the file! No players are available in the session.")
-        return redirect(url_for("keys"))
+        flash("Problem exporting the file! No players are available in the session.")
+        return redirect(url_for("players"))
+
+
+
+# Special file Allocation.txt needed for the intermediate game
+# (Minecraft independent feature)
+@app.route("/players/export/allocation/<int:session_number>", methods=["GET"])
+def export_allocation_players(session_number):
+    try:
+        response = make_response(utils.session_to_allocation_file(session_number).getvalue())
+        response.headers["Content-Disposition"] = "attachment; filename=Allocation.txt"
+        response.headers["Content-type"] = "text/plain"
+        return response
+    except Exception as e:
+        flash("Problem exporting the file! No players are available in the session.")
+        return redirect(url_for("players"))
+
 
 
 @app.teardown_appcontext
 def shutdown_session(exception=None):
     db_session.remove()
-    
+
+
 
 def add_stats_to_db(data):
     session_uuid = data['session_id']
@@ -356,8 +418,9 @@ def add_stats_to_db(data):
     player_id = data['player']
     stats = json.loads(data['stats'])
     position_over_time = data['position_over_time']
+    solution = data['solution']
     checkpoints = data['checkpoints']
-    
+        
     # try to find if the session has already been created
     # if not: create a new one
     try:
@@ -386,10 +449,12 @@ def add_stats_to_db(data):
 
     stat.position_over_time = json.dumps(position_over_time)
     stat.checkpoints = json.dumps(checkpoints)
+    stat.solution = solution
     
     print(test)
     print(stats)
-        
+    items = {}
+    
     for (k,v) in stats.items():
         k = k.split('.')
         attr = k[0]
@@ -402,15 +467,9 @@ def add_stats_to_db(data):
                 # try to find an already existing item in db
                 # if exists: update it
                 # else: create it
-                try:
-                    item = db_session.query(Item).filter_by(test_id=test.id, player_id=player_id, item=item_id).one()
-                except:
-                    print(test)
-                    item = Item(test.id, player_id)
-                    test.items.append(item)
-                    setattr(item, 'item', item_id)
-                    
-                setattr(item, column, v)
+                if not item_id in items:
+                    items[item_id] = {}
+                items[item_id][column] = v
             else:
                 # only adds statistics defined in db
                 try:
@@ -427,9 +486,19 @@ def add_stats_to_db(data):
         else:
             pass
 
+    for (item_id, item_values) in items.items():
+        try:
+            item = db_session.query(Item).filter_by(test_id=test.id, player_id=player_id, item_item=item_id).one()
+
+        except:
+            item = Item(test.id, player_id)
+            test.items.append(item)
+            setattr(item, 'item_item', item_id)
+
+        for (action, n) in item_values.items():    
+            setattr(item, action, n)
+
     db_session.add(session)
-    # db_session.add(test)
-    # db_session.add_all(items)
     db_session.commit()
     
 if __name__ == '__main__':

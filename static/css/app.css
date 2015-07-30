@@ -1,0 +1,16 @@
+.green {
+    color: green;
+}
+
+.blue {
+    color: blue;
+}
+
+.table th, td {
+    text-align: center;
+}
+
+.glyphicon-large {
+    padding: 10px;
+    font-size: 20px;
+}

@@ -1,19 +1,12 @@
+from bs4 import BeautifulSoup
 from database import Base, engine, db_session
 from models import *
-import random
-
-
 
 Base.metadata.create_all(bind=engine)
 
-n = 100
-#ids = random.sample(range(5000), n)
-ids = range(n)
-
-nr_players = 20
-
-for i in ids:
-    print(i, i, int(i/nr_players + 1), int(i%nr_players/2))
-    db_session.add(Player(i, i, int(i/nr_players + 1), int(i%nr_players/2)))
-
-db_session.commit()
+with open("items_list.html", "r") as f:
+    soup = BeautifulSoup(f.read(), "html.parser")
+    for item in soup.find_all("tr"):
+        id_, img, name = item.find_all("td")
+        db_session.add(ItemName(id_.string, name.a.string))
+    db_session.commit()

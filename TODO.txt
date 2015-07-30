@@ -2,3 +2,6 @@ client.py:
 * handle exceptions: server not reachable
 * handle disconnections
 
+app.py:
+
+* add general/aggregated stats

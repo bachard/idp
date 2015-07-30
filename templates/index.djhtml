@@ -2,11 +2,13 @@
 
 {% block content %}
     <section class="row">
-        <div class="col-lg-4">
-            <p><a href="/view/connections/">View connections</a></p>
-            <p><a href="/view/sessions/">View stats</a></p>
-            <p><a href="/view/sessions/csv" target="_blank">Export stats to CSV</a></p>
-            <p><a href="/keys/">Manage keys</a></p>
+        <div class="col-lg-offset-1 col-lg-4"">
+            <ul class="nav nav-pills nav-stacked">
+                <li><a href="/view/sessions/"><h4>Explore statistics</h4></a></li>
+                <li><a href="/view/sessions/csv" target="_blank"><h4>Export stats to CSV</h4></a></li>
+                <li><a href="/players/"><h4>Manage players</h4></a></li>
+                <li><a href="/view/connections/"><h4>View connections</h4></a></li>
+            </ul>
         </div>
     </section>
 {% endblock %}

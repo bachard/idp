@@ -68,30 +68,31 @@ class Stat(Base):
 
     checkpoints = Column(LargeBinary)
     position_over_time = Column(LargeBinary)
+    solution = Column(String(100))
     
-    play_one_minute = Column(Integer)
-    walk_one_cm = Column(Integer)
-    swim_one_cm = Column(Integer)
-    dive_one_cm = Column(Integer)
-    jump = Column(Integer)
+    play_one_minute = Column(Integer, default=0)
+    walk_one_cm = Column(Integer, default=0)
+    swim_one_cm = Column(Integer, default=0)
+    dive_one_cm = Column(Integer, default=0)
+    jump = Column(Integer, default=0)
     
-    climb_one_cm = Column(Integer)
-    fly_one_cm = Column(Integer)
-    boat_one_cm = Column(Integer)
-    minecart_one_cm = Column(Integer)
-    pig_one_cm = Column(Integer)
-    horse_one_cm = Column(Integer)
+    climb_one_cm = Column(Integer, default=0)
+    fly_one_cm = Column(Integer, default=0)
+    boat_one_cm = Column(Integer, default=0)
+    minecart_one_cm = Column(Integer, default=0)
+    pig_one_cm = Column(Integer, default=0)
+    horse_one_cm = Column(Integer, default=0)
 
-    fall_one_cm = Column(Integer)
-    damage_taken = Column(Integer)
-    deaths = Column(Integer)
+    fall_one_cm = Column(Integer, default=0)
+    damage_taken = Column(Integer, default=0)
+    deaths = Column(Integer, default=0)
 
-    damage_dealt = Column(Integer)
-    mob_kills = Column(Integer)
-    player_kills = Column(Integer)
+    damage_dealt = Column(Integer, default=0)
+    mob_kills = Column(Integer, default=0)
+    player_kills = Column(Integer, default=0)
 
-    drop = Column(Integer)
-    number_biomes = Column(Integer)
+    drop = Column(Integer, default=0)
+    number_biomes = Column(Integer, default=0)
 
     def __init__(self, test_id, player_id):
         self.test_id = test_id
@@ -113,16 +114,19 @@ class Item(Base):
     id = Column(Integer, primary_key=True)
     test_id = Column(Integer, ForeignKey("tests.id"))
     player_id = Column(Integer, ForeignKey("players.id"))
-
-    item = Column(Integer)
-    use_item = Column(Integer)
+    item_item = Column(String(40), ForeignKey("item_names.item"))
+    item = relationship("ItemName")
+    use_item = Column(Integer, default=0)
+    mine_block = Column(Integer, default=0)
+    craft_item = Column(Integer, default=0)
+    break_item = Column(Integer, default=0)
 
     def __init__(self, test_id, player_id):
         self.test_id = test_id
         self.player_id = player_id
     
     def __repr__(self):
-        s = "[ player {}, item {}: used {} times ]".format(self.player_id, self.item, self.use_item)
+        s = "Item #{} ({}): used {}, mined {}, crafted {}, broken {}".format(self.item_item, self.item.name, self.use_item, self.mine_block, self.craft_item, self.break_item)
         return s
     
 
@@ -168,19 +172,36 @@ class Player(Base):
     in_use = Column(Boolean)
     session_nr = Column(Integer)
     pair = Column(Integer)
-    setup = Column(Integer)
+    condition = Column(Integer)
+    player_condition = Column(Integer)
     
     connection = relationship("Connection", foreign_keys=[Connection.player_id], backref="players", uselist=False, cascade="all, delete, delete-orphan")
     connection_other = relationship("Connection", foreign_keys=[Connection.connected_player_id], uselist=False, cascade="all, delete, delete-orphan")
 
-    def __init__(self, key, name, session_nr, pair, setup=-1):
+    def __init__(self, key, name, session_nr, pair, condition=0, player_condition=0):
         self.key = key
         self.name = name
         self.session_nr = session_nr
         self.pair = pair
-        self.setup = setup
+        self.condition = condition
+        self.player_condition = player_condition
         self.in_use = 0
     
     def __repr__(self):
-        s = "key {}, name {}, used {}, session nr {}, pair {}".format(self.key, self.name, self.in_use, self.session_nr, self.pair)
+        s = "key {}, name {}, used {}, session nr {}, pair {}, condition {}, player condition {}".format(self.key, self.name, self.in_use, self.session_nr, self.pair, self.condition, self.player_condition)
         return s
+
+
+class ItemName(Base):
+    __tablename__ = "item_names"
+
+    id = Column(Integer, primary_key=True)
+    item = Column(String(40), unique=True)
+    name = Column(String(100))
+
+    def __init__(self, item, name):
+        self.item = item
+        self.name = name
+
+    def __repr__(self):
+        return "{}, {}".format(self.item, self.name)

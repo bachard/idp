@@ -11,33 +11,35 @@
     {% endwith %}
     <div class="row">
         <div class="col-lg-12">
-            <legend>Create new keys</legend>
-            <form class="form-inline" action="/keys/create/" method="post">
+            <legend>Create new players</legend>
+            <form class="form-inline" action="/players/create/" method="post">
                 <div class="form-group">
                     <label for="number_players">Number of players</label>
                     <input type="text" class="form-control" id="number_players" name="number_players" placeholder="number of players (ex. 12)">
                 </div>
-                <button class="btn btn-default">Create keys!</button>
+                <button class="btn btn-default">Create players!</button>
             </form>
         </div>
     </div>
-    <div class="row">
+    <div class="row" style="padding-top:40px">
         <div class="col-lg-12">
-            <legend>Created keys</legend>
+            <legend>Created players</legend>
             {% if sessions %}
                 <table class="table table-bordered table-striped table-condensed" >
                     <thead>
                         <th>Session number</th>
                         <th>Number of players</th>
-                        <th>View</th>
-                        <th>Print</th>
+                        <th>Edit</th>
+                        <th>CSV</th>
+                        <th>Allocation</th>
                     </thead>
                     {% for session in sessions %}
                         <tr>
                             <td>{{ session[0] }}</td>
                             <td>{{ session[1] }}</td>
-                            <td><a href="/keys/{{ session[0] }}">View keys</a></td>
-                            <td><a href="/keys/print/{{ session[0] }}">Print keys</a></td>
+                            <td><a href="/players/{{ session[0] }}"><span class="glyphicon glyphicon-edit"></span></a></td>
+                            <td><a href="/players/export/csv/{{ session[0] }}"><span class="glyphicon glyphicon-download"></span></a></td>
+                            <td><a href="/players/export/allocation/{{ session[0] }}"><span class="glyphicon glyphicon-download"></span></a></td>
                         </tr>
                     {% endfor %}
                 </table>
@@ -46,6 +48,8 @@
             {% endif %}
         </div>
     </div>
-    <p><a href="/view/">Return to monitoring</a></p>
+    <p class="text-center">
+        <a href="/view/"><span class="glyphicon glyphicon-home glyphicon-large"></span></a>
+    </p>
 
 {% endblock %}

@@ -8,3 +8,4 @@ minecraft:
 java:
     path: /usr/bin/java
 database: mysql+pymysql://root:bib@localhost/minecraft
+# database: sqlite:///database.db
