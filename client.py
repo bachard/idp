@@ -1,26 +1,37 @@
+"""
+Client used for connecting to another player and launching Minecraft
+The interface is using TkInter
+Settings for the server and Minecraft are located in the settings.yml file
+"""
+
+
+
 import tkinter as tk
 import time
 import requests
 from requests.exceptions import RequestException, ConnectionError
 import subprocess
-from random import randint
 from utils import read_settings
+
+
+
 
 class Application(tk.Frame):
 
+    # settings is a common variable for all clients
     settings = read_settings()
 
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
-        self.id_ = randint(0,1000)
         self.player_id = None
         self.key = None
-        self.master.title("Player {}".format(self.id_))
+        self.master.title("Minecraft client")
         self.grid()
         self.createWidgets()
         self.server_root = "http://{}:{}/".format(self.settings["server"]["address"], self.settings["server"]["port"])
 
     def destroy(self):
+        """Overrides the destroy method to disconnect the players first"""
         if self.player_id is not None:
             status = -1
             while status == -1:
@@ -29,6 +40,7 @@ class Application(tk.Frame):
         tk.Frame.destroy(self)
         
     def createWidgets(self):
+        """Creates the interface"""
         self.field_label = tk.Label(self, text="Enter your key:")
         self.var_key = tk.StringVar()
         self.input_key = tk.Entry(self, textvariable=self.var_key, width=30)
@@ -41,16 +53,19 @@ class Application(tk.Frame):
         self.field_connect.grid(padx=10, pady=10)
     
     def connect(self):
+        """Calls the identifcation method"""
         self.button_connect["state"] = tk.DISABLED
         self.field_connect["text"] = "Checking identification..."
         print(self.field_connect["text"])
         self.master.after(100, self.callback_identification)
 
     def callback_identification(self):
+        """"Sends the key to the server for identification and calls the connection method"""
         self.key = self.var_key.get()
         d = self.get_data("identification/", method="POST", data={"key":self.key})
 
         if d["status"] == 1:
+            # Identification went fine
             self.field_connect["text"] = d["text"]
             self.field_connect["text"] += "\nConnecting to server..."
             self.player_id = d["data"]["player_id"]
@@ -58,11 +73,13 @@ class Application(tk.Frame):
             print(self.field_connect["text"])
             self.master.after(100, self.callback_connection)
         else:
+            # Identification problem
             self.field_connect["text"] = d["text"]
             self.button_connect["state"] = tk.NORMAL
             print(self.field_connect["text"])
 
     def callback_connection(self):
+        """Sets the player available for connection"""
         d = self.get_data("connect/", method="POST", data={"id":self.player_id})
 
         if d["status"] == 1:
@@ -70,6 +87,7 @@ class Application(tk.Frame):
             self.master.after(100, self.callback_wait_for_connection)
         
     def callback_wait_for_connection(self):
+        """Wait until the player is connected"""
         connected = False
         while not connected:
             d = self.get_data("connected_with/{}".format(self.player_id))
@@ -80,18 +98,18 @@ class Application(tk.Frame):
                 time.sleep(2)
                 self.field_connect["text"] = d["text"]
 
-        print(d)
         if d["role"] == 0:
             role = "Client"
         elif d["role"] == 1:
             role = "Main"
-                
+        # Once the player is connected, we write the Minecraft connection files        
         with open(self.settings["minecraft"]["connection_file"], 'w') as f:
             f.write("{}\n{}\n".format(role, d["connection_id"]))
 
         with open(self.settings["minecraft"]["server_file"], 'w') as f:
             f.write("{}\n{}\n{}".format(self.server_root+"upload_json/", self.player_id, d["connected_player_id"]))
 
+        # Client is ready to launch the game
         self.field_connect["text"] = "Connected with {} as {}".format(d["connected_player_name"], role)
         print(self.field_connect["text"])
         self.button_connect["text"] = "Play!"
@@ -99,6 +117,7 @@ class Application(tk.Frame):
         self.button_connect["state"] = tk.NORMAL
 
     def get_data(self, url, method = "GET", data = None):
+        """Generic method to reach the server"""
         url = self.server_root + url
         d = {}
         d["status"] = -1
@@ -122,6 +141,7 @@ class Application(tk.Frame):
             return d
         
     def play(self):
+        """Updates the interface and calls the play callback"""
         self.field_label["text"] = "Good game!"
         self.button_connect["text"] = "Playing..."
         self.button_connect["command"] = None
@@ -140,8 +160,11 @@ class Application(tk.Frame):
         self.button_connect["command"] = self.play
         self.button_connect["state"] = tk.NORMAL
         self.field_connect["text"] = ""
-        
-    
-root = tk.Tk()
-app = Application(master=root)
-app.mainloop()
+
+
+
+if __name__ == '__main__':
+    # We launch the interface    
+    root = tk.Tk()
+    app = Application(master=root)
+    app.mainloop()

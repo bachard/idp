@@ -1,3 +1,8 @@
+"""
+Creates the necessary variables for database interaction
+Database settings are defined in settings.yml
+"""
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import scoped_session, sessionmaker
 from sqlalchemy.ext.declarative import declarative_base

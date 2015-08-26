@@ -1,5 +1,5 @@
 """
-Server based on Flask to handle player connections, manage players and visualize data
+Server based on Flask to handle player connections, manage players and visualize data, inspired by the RESTFul model
 
 For interaction with clients, a json is sent back containing:
     * status: integer, -1 for server error, 0 for error, 1 for correct response
@@ -303,239 +303,15 @@ def upload_json():
 
 
 
-#########################################
-# Web interface for managing statistics #
-#########################################
-
-# Templates are located in templates/ folder
-# view_data.djhtml is the main templates for displaying generic data
-# using columns and data arguments
-
-@app.route('/', methods=["GET"])
-def index():
-    """By default, the user is redirected to the managing interface"""
-
-    return redirect(url_for("view_index"))
-
-
-    
-@app.route("/view/")
-def view_index():
-    """Main interface for managing statistics and players"""
-
-    return render_template("index.djhtml", title="Monitoring")
-
-
-
-@app.route("/view/connections/")
-def view_connections():
-    """Shows the current connections"""
-
-    columns = [c.name for c in Connection.__table__.columns]
-    connections = db_session.query(Connection).all()
-    return render_template("view_data.djhtml", title="Connections", columns=columns, data=connections)
-
-
-
-@app.route("/view/sessions/")
-def view_sessions():
-    """Shows the saved sessions in the database"""
-
-    columns = [c.name for c in Session.__table__.columns]
-    # We add the link to the tests of the session
-    columns.append("view_tests")
-    sessions = db_session.query(Session).all()
-    # For each tests in the session we get the corresponding id
-    [setattr(session, "view_tests", "/view/tests/{}".format(session.id)) for session in sessions]
-    
-    return render_template("view_data.djhtml", title="Sessions", columns=columns, data=sessions)
-
-
-
-@app.route("/view/tests/<int:session_id>")
-def view_tests(session_id):
-    """Show the tests of a specific session"""
-    
-    columns = [c.name for c in Test.__table__.columns]
-    # We add the link to the stats and items of the test
-    columns.append("view_stats")
-    columns.append("view_items")
-    tests = db_session.query(Test).filter_by(session_id=session_id).all()
-    # For each stats and items in the test we get the corresponding id
-    [setattr(test, "view_stats", "/view/stats/{}".format(test.id)) for test in tests]
-    [setattr(test, "view_items", "/view/items/{}".format(test.id)) for test in tests]   
-
-    return render_template("view_data.djhtml", title="Tests for session {}".format(session_id), columns=columns, data=tests, back="/view/sessions/")
-
-
-
-@app.route("/view/stats/<int:test_id>")
-def view_stats(test_id):
-    """Show the stats for a specific test"""
-    
-    columns = [c.name for c in Stat.__table__.columns]
-    # We remove columns we do not want to show
-    columns.remove("position_over_time")
-    stats = db_session.query(Stat).filter_by(test_id=test_id).all()
-    # pretty print for the position_over_time field
-    # for stat in stats:
-    #     stat.position_over_time = {k: json.loads(v) for (k,v) in json.loads(stat.position_over_time).items()}
-    session_id = db_session.query(Test).get(test_id).session_id
-
-    return render_template("view_data.djhtml", title="Stats for test {}".format(test_id), columns=columns, data=stats, back="/view/tests/{}".format(session_id))
-
-
-@app.route("/view/items/<int:test_id>")
-def view_items(test_id):
-    """Show the items for a specific test"""
-    
-    columns = [c.name for c in Item.__table__.columns]
-    # We remove columns we do not want to show
-    columns.remove("id")
-    columns.remove("test_id")
-    columns.remove("item_item")
-    columns.insert(1, "item_id")
-    columns.insert(2, "name")
-    items = db_session.query(Item).filter_by(test_id=test_id).all()
-    [setattr(item, "item_id", item.item.item) for item in items]
-    [setattr(item, "name", item.item.name) for item in items]
-    session_id = db_session.query(Test).get(test_id).session_id
-    return render_template("view_data.djhtml", title="Items for test {}".format(test_id), columns=columns, data=items, back="/view/tests/{}".format(session_id))
-
-
-##########################
-# Export all data to CSV #
-##########################
-
-@app.route("/view/sessions/csv/")
-def view_sessions_csv():
-    response = make_response(utils.stats_to_csv().getvalue())
-    response.headers["Content-Disposition"] = "attachment; filename=stats.txt"
-    response.headers["Content-type"] = "text/csv"
-    return response
-
-
-
-
-######################
-# Players management #
-######################
-
-@app.route("/players/")
-def players():
-    sessions = [s for s in db_session.query(Player.session_nr, func.count(Player.pair)).group_by(Player.session_nr).all()]
-    return render_template("players.djhtml", title="Manage players", sessions=sessions)
-
-
-@app.route("/players/<int:session_nr>")
-def view_players(session_nr):
-    columns = [c.name for c in Player.__table__.columns]
-    modifiable = ["name", "condition", "player_condition"]
-    action = "/players/update/"
-    players = db_session.query(Player).filter_by(session_nr=session_nr).all()
-    return render_template("view_data.djhtml", title="Players for session {}".format(session_nr), id=session_nr, columns=columns, data=players, modifiable=modifiable, action=action, back="/players/")
-
-
-@app.route("/players/create/", methods=["POST"])
-def create_players():
-    if "number_players" in request.form:
-        try:
-            number_players = int(request.form["number_players"])
-            if number_players % 2 != 0:
-                flash("Even number of players!")
-            else:
-                try:
-                    last_session_nr = db_session.query(func.max(Player.session_nr)).one()[0]
-                    last_session_nr = last_session_nr if last_session_nr else 0
-                    session_nr = last_session_nr + 1
-                    for i in range(number_players):
-                        added = False
-                        while not added:
-                            try:
-                                key = '{0:06}'.format(randint(1, 1000000))
-                                db_session.add(Player(key, key, session_nr, int(i/2) + 1, 0, i%2 + 1))
-                                db_session.commit()
-                                added = True
-                            except Exception as e:
-                                db_session.rollback()
-                    flash("The players were created! The session number is {}.".format(session_nr))
-                except Exception as e:
-                    flash("An exception has occured!<br />Exception message: {}".format(e))
-                
-        except ValueError as e:
-            flash("The argument is invalid! You did not pass an integer as parameter...")
-    else:
-        flash("Invalid form!")
-    return redirect(url_for("players"))
-
-
-@app.route("/players/update/", methods=["POST"])
-def update_player():
-    data = request.get_json(silent=True)
-    print(data);
-    if data:
-        try:
-            for update_player in data["update_players"]:
-                player_id = update_player.pop("id")
-                player = db_session.query(Player).get(player_id)
-                for (attr, value) in update_player.items():
-                    setattr(player, attr, value)
-                    db_session.add(player)
-            db_session.commit()
-            return jsonify(status=1, text="Update successful")
-        except Exception as e:
-            return jsonify(status=-1, data=str(e), text="Exception!")
-    else:
-        return jsonify(status=0, text="No JSON provided!")
-
-
-    
-# We save the file as .txt because MS Excel might not recongnize
-# the separator, opening a .txt file will let the user choose
-@app.route("/players/export/csv/<int:session_number>", methods=["GET"])
-def export_csv_players(session_number):
-    try:
-        response = make_response(utils.session_to_csv(session_number).getvalue())
-        response.headers["Content-Disposition"] = "attachment; filename=session_{}.txt".format(session_number)
-        response.headers["Content-type"] = "text/csv"
-        return response
-    except Exception as e:
-        flash("Problem exporting the file! No players are available in the session.")
-        return redirect(url_for("players"))
-
-
-
-# Special file Allocation.txt needed for the intermediate game
-# (Minecraft independent feature)
-@app.route("/players/export/allocation/<int:session_number>", methods=["GET"])
-def export_allocation_players(session_number):
-    try:
-        response = make_response(utils.session_to_allocation_file(session_number).getvalue())
-        response.headers["Content-Disposition"] = "attachment; filename=Allocation.txt"
-        response.headers["Content-type"] = "text/plain"
-        return response
-    except Exception as e:
-        flash("Problem exporting the file! No players are available in the session.")
-        return redirect(url_for("players"))
-
-
-
-@app.teardown_appcontext
-def shutdown_session(exception=None):
-    db_session.remove()
-
-
-
 def add_stats_to_db(data):
+    """Add data statistics to the database"""
+    # Expected parameters
     session_uuid = data['session_id']
     world = data['world']
     round = data['round']
     player_id = data['player']
     stats = json.loads(data['stats'])
-    try:
-        position_over_time = data['position_over_time']
-    except Exception as e:
-        print(e)
+    position_over_time = data['position_over_time']
     solution = data['solution']
     checkpoints = data['checkpoints']
         
@@ -621,7 +397,265 @@ def add_stats_to_db(data):
 
     db_session.add(session)
     db_session.commit()
+
+
     
+#########################################
+# Web interface for managing statistics #
+#########################################
+
+# Templates are located in templates/ folder
+# view_data.djhtml is the main templates for displaying generic data
+# using columns and data arguments
+# modifiable parameter specificies the columns that can be modified
+
+@app.route('/')
+def index():
+    """By default, the user is redirected to the managing interface"""
+
+    return redirect(url_for("view_index"))
+
+
+    
+@app.route("/view/")
+def view_index():
+    """Main interface for managing statistics and players"""
+
+    return render_template("index.djhtml", title="Monitoring")
+
+
+
+@app.route("/view/connections/")
+def view_connections():
+    """Shows the current connections"""
+
+    columns = [c.name for c in Connection.__table__.columns]
+    connections = db_session.query(Connection).all()
+    return render_template("view_data.djhtml", title="Connections", columns=columns, data=connections)
+
+
+
+@app.route("/view/sessions/")
+def view_sessions():
+    """Shows the saved sessions in the database"""
+
+    columns = [c.name for c in Session.__table__.columns]
+    # We add the link to the tests of the session
+    columns.append("view_tests")
+    sessions = db_session.query(Session).all()
+    # For each tests in the session we get the corresponding id
+    [setattr(session, "view_tests", "/view/tests/{}".format(session.id)) for session in sessions]
+    
+    return render_template("view_data.djhtml", title="Sessions", columns=columns, data=sessions)
+
+
+
+@app.route("/view/tests/<int:session_id>")
+def view_tests(session_id):
+    """Show the tests of a specific session"""
+    
+    columns = [c.name for c in Test.__table__.columns]
+    # We add the link to the stats and items of the test
+    columns.append("view_stats")
+    columns.append("view_items")
+    tests = db_session.query(Test).filter_by(session_id=session_id).all()
+    # For each stats and items in the test we get the corresponding id
+    [setattr(test, "view_stats", "/view/stats/{}".format(test.id)) for test in tests]
+    [setattr(test, "view_items", "/view/items/{}".format(test.id)) for test in tests]   
+
+    return render_template("view_data.djhtml", title="Tests for session {}".format(session_id), columns=columns, data=tests, back="/view/sessions/")
+
+
+
+@app.route("/view/stats/<int:test_id>")
+def view_stats(test_id):
+    """Show the stats for a specific test"""
+    
+    columns = [c.name for c in Stat.__table__.columns]
+    # We remove columns we do not want to show
+    columns.remove("position_over_time")
+    stats = db_session.query(Stat).filter_by(test_id=test_id).all()
+    # pretty print for the position_over_time field
+    # for stat in stats:
+    #     stat.position_over_time = {k: json.loads(v) for (k,v) in json.loads(stat.position_over_time).items()}
+
+    # Link to go back to the tests
+    session_id = db_session.query(Test).get(test_id).session_id
+
+    return render_template("view_data.djhtml", title="Stats for test {}".format(test_id), columns=columns, data=stats, back="/view/tests/{}".format(session_id))
+
+
+
+@app.route("/view/items/<int:test_id>")
+def view_items(test_id):
+    """Show the items for a specific test"""
+    
+    columns = [c.name for c in Item.__table__.columns]
+    # We remove columns we do not want to show
+    columns.remove("id")
+    columns.remove("test_id")
+    columns.remove("item_item")
+    # We add the id and name of the item
+    columns.insert(1, "item_id")
+    columns.insert(2, "name")
+    items = db_session.query(Item).filter_by(test_id=test_id).all()
+    # We link the id and name of the item
+    [setattr(item, "item_id", item.item.item) for item in items]
+    [setattr(item, "name", item.item.name) for item in items]
+
+    # Link to go back to the tests
+    session_id = db_session.query(Test).get(test_id).session_id
+    
+    return render_template("view_data.djhtml", title="Items for test {}".format(test_id), columns=columns, data=items, back="/view/tests/{}".format(session_id))
+
+
+
+##########################
+# Export all data to CSV #
+##########################
+
+@app.route("/view/sessions/csv/")
+def view_sessions_csv():
+    """Exports the statistics data to a CSV file"""
+    response = make_response(utils.stats_to_csv().getvalue())
+    response.headers["Content-Disposition"] = "attachment; filename=stats.csv"
+    response.headers["Content-type"] = "text/csv"
+    return response
+
+
+
+######################
+# Players management #
+######################
+
+
+
+@app.route("/players/")
+def players():
+    """Interface for managing players"""
+    sessions = [s for s in db_session.query(Player.session_nr, func.count(Player.pair)).group_by(Player.session_nr).all()]
+    return render_template("players.djhtml", title="Manage players", sessions=sessions)
+
+
+
+@app.route("/players/<int:session_nr>")
+def view_players(session_nr):
+    """
+    Shows the players of a specific session
+    Several fields can be modified
+    """
+    columns = [c.name for c in Player.__table__.columns]
+    # Specificies the modifiable fields
+    modifiable = ["name", "condition", "player_condition"]
+    # Link to the target of the AJAX POST request for modifiying fields
+    action = "/players/update/"
+    players = db_session.query(Player).filter_by(session_nr=session_nr).all()
+    return render_template("view_data.djhtml", title="Players for session {}".format(session_nr), id=session_nr, columns=columns, data=players, modifiable=modifiable, action=action, back="/players/")
+
+
+
+@app.route("/players/create/", methods=["POST"])
+def create_players():
+    """Creates a session of number_players players"""
+    if "number_players" in request.form:
+        try:
+            # We check if the parameter is an even int
+            number_players = int(request.form["number_players"])
+            if number_players % 2 != 0:
+                flash("Odd number of players!")
+            else:
+                try:
+                    # We compute the session number
+                    last_session_nr = db_session.query(func.max(Player.session_nr)).one()[0]
+                    last_session_nr = last_session_nr if last_session_nr else 0
+                    session_nr = last_session_nr + 1
+                    for i in range(number_players):
+                        added = False
+                        # For each player we generate a random key
+                        while not added:
+                            try:
+                                key = '{0:06}'.format(randint(1, 1000000))
+                                db_session.add(Player(key, key, session_nr, int(i/2) + 1, 0, i%2 + 1))
+                                db_session.commit()
+                                # The key did not exist and has been added
+                                added = True
+                            except Exception as e:
+                                # The key already exists
+                                db_session.rollback()
+                    flash("The players were created! The session number is {}.".format(session_nr))
+                except Exception as e:
+                    # Unknown exception
+                    flash("An exception has occured!<br />Exception message: {}".format(e))
+                
+        except ValueError as e:
+            # The parameter was not an int
+            flash("The argument is invalid! You did not pass an integer as parameter...")
+    else:
+        flash("Invalid form!")
+    # Finally we redirect to the main interface
+    return redirect(url_for("players"))
+
+
+
+@app.route("/players/update/", methods=["POST"])
+def update_player():
+    """Updates players' information (AJAX call)"""
+    data = request.get_json(silent=True)
+    if data:
+        try:
+            for update_player in data["update_players"]:
+                player_id = update_player.pop("id")
+                player = db_session.query(Player).get(player_id)
+                for (attr, value) in update_player.items():
+                    setattr(player, attr, value)
+                    db_session.add(player)
+            db_session.commit()
+            return jsonify(status=1, text="Update successful")
+        except Exception as e:
+            return jsonify(status=-1, data=str(e), text="Exception!")
+    else:
+        return jsonify(status=0, text="No JSON provided!")
+
+
+    
+
+@app.route("/players/export/csv/<int:session_number>", methods=["GET"])
+def export_csv_players(session_number):
+    """Exports the players as CSV"""
+    try:
+        response = make_response(utils.session_to_csv(session_number).getvalue())
+        response.headers["Content-Disposition"] = "attachment; filename=session_{}.csv".format(session_number)
+        response.headers["Content-type"] = "text/csv"
+        return response
+    except Exception as e:
+        # The session does not exist yet
+        flash("Problem exporting the file! No players are available in the session.")
+        return redirect(url_for("players"))
+
+
+
+# Special file Allocation.txt needed for the intermediate game
+# (Minecraft independent feature)
+@app.route("/players/export/allocation/<int:session_number>", methods=["GET"])
+def export_allocation_players(session_number):
+    """Exports the Allocation.txt file"""
+    try:
+        response = make_response(utils.session_to_allocation_file(session_number).getvalue())
+        response.headers["Content-Disposition"] = "attachment; filename=Allocation.txt"
+        response.headers["Content-type"] = "text/plain"
+        return response
+    except Exception as e:
+        flash("Problem exporting the file! No players are available in the session.")
+        return redirect(url_for("players"))
+
+
+
+@app.teardown_appcontext
+def shutdown_session(exception=None):
+    db_session.remove()
+
+    
+
 if __name__ == '__main__':
     if not app.ext:
         app.run(port=1234, threaded=True)

@@ -1,5 +1,7 @@
 ECHO OFF
 
+REM DOS Script for creating executables for app.py, client.py, test.py using py2exe 
+
 TITLE create executables
 
 IF EXIST %cd%\dist\NUL rd /s /q %cd%\dist\

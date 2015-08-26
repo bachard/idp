@@ -12,6 +12,3 @@ minecraft:
 java:
     path: C:\Program Files (x86)\Java\jre7\bin\java.exe
 database: sqlite:///database.db
-#    path: /usr/bin/java
-#    path: /home/bib/.minecraft/launcher.jar
-# database: mysql+pymysql://root:bib@localhost/minecraft

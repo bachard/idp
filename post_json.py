@@ -1,3 +1,6 @@
+"""
+Simple script to simulate statistics sending of Minecraft mod
+"""
 import requests
 import json
 from random import randint

@@ -1,3 +1,4 @@
+"""Script to generate the database structure"""
 from bs4 import BeautifulSoup
 from database import Base, engine, db_session
 from models import *

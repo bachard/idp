@@ -1,3 +1,5 @@
+"""Set of utils functions"""
+
 import sys
 import os
 import yaml
@@ -5,7 +7,9 @@ import settings
 import csv
 from io import StringIO
 
+
 def read_settings():
+    """Read the settings.yml file and returns a dictionnary"""
     try:
         f = open(settings.SETTINGS_FILE, "r")
         return yaml.load(f.read())
@@ -16,6 +20,7 @@ def read_settings():
 
 
 def stats_to_csv():
+    """Write the statistics to a CSV file"""
     from database import db_session
     from models import Session, Test, Stat, Item, Player
     session_columns = [c.name for c in Session.__table__.columns]
@@ -30,9 +35,10 @@ def stats_to_csv():
     stat_columns.remove("position_over_time")
     
     output = StringIO()
-    csvwriter = csv.writer(output, delimiter=';')
+    csvwriter = csv.writer(output, delimiter=',')
     csvwriter.writerow([c.replace("_", " ") for c in (session_columns + test_columns + stat_columns)])
-    
+
+    # We get all the data using references in transversal way
     sessions = db_session.query(Session).all()
     for session in sessions:
         session_out = [getattr(session, c) for c in session_columns]
@@ -52,11 +58,12 @@ def stats_to_csv():
 
 
 def session_to_csv(session_nr):
+    """Writes the players of a specific session to CSV"""
     from database import db_session
     from models import Player
 
     output = StringIO()
-    csvwriter = csv.writer(output, delimiter=';')
+    csvwriter = csv.writer(output, delimiter=',')
     csvwriter.writerow(["session nr", "key", "name", "pair", "used"])
 
     for player in db_session.query(Player).filter_by(session_nr=session_nr).all():
@@ -67,6 +74,7 @@ def session_to_csv(session_nr):
 
 
 def session_to_allocation_file(session_nr):
+    """Creates the Allocation.txt file for a specific session"""
     from database import db_session
     from models import Player
 
