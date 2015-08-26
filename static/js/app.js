@@ -1,5 +1,10 @@
+/**
+ * Functions used for updating modifiable fields using a AJAX POST request
+ *
+ */
 $(document).ready(function() {
 
+    // Changes the state of the icons to edit
     function toggleEdit() {
         $('button[data-type="send_data"] span').each(function() {
             $(this).removeClass("glyphicon-check")
@@ -9,6 +14,7 @@ $(document).ready(function() {
         });
     }
 
+    // Changes the state of the icons to check
     function toggleCheck() {
         $('button[data-type="send_data"] span').each(function() {
             $(this).addClass("glyphicon-check")
@@ -20,7 +26,8 @@ $(document).ready(function() {
     }
     
     $("input").on("change", toggleEdit);
-    
+
+    // Sends the data using AJAX POST request
     $('button[data-type="send_data"]').on("click", function() {
         
         var $this = $(this);
