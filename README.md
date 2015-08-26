@@ -18,17 +18,18 @@ You will need to use a Python3 compatible plugin to connect to the RDBMS (ex. [P
 
 ## Settings
 All the settings are specified in ```settings.yml```:
+
 1. flask: Flask general settings
-   * secret_key: secret key to be used
-   * debug: launch in debug mode or not
-   * ext: server available externally (set to True in production mode)
+  * secret_key: secret key to be used
+  * debug: launch in debug mode or not
+  * ext: server available externally (set to True in production mode)
 2. server: Server general settings
-   * address: address of the server
-   * port: port of the app
+  * address: address of the server
+  * port: port of the app
 3. database: database connection URI
 4. minecraft: Minecraft general settings
-   * path: path to the Minecraft launcher.jar
-   * connection_file: path to the connection file
-   * server_file: path to the server file
+  * path: path to the Minecraft launcher.jar
+  * connection_file: path to the connection file
+  * server_file: path to the server file
 5. java: Java general settings
-   * path: path to the Java interpreter
+  * path: path to the Java interpreter
