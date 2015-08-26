@@ -1,9 +1,13 @@
 import requests
 import json
 from random import randint
+from utils import read_settings
+
+settings = read_settings()
 
 
-url = "http://127.0.0.1:1234/upload_json/"
+
+url = "http://{}:{}/upload_json/".format(settings["server"]["address"], settings["server"]["port"])
 
 headers = {"Content-type": "application/json", "Accept": "text/plain"}
 

@@ -1,47 +1,81 @@
+"""
+Server based on Flask to handle player connections, manage players and visualize data
+
+For interaction with clients, a json is sent back containing:
+    * status: integer, -1 for server error, 0 for error, 1 for correct response
+    * text: string, message displayed to the client
+    * data: json/text, optional
+
+In a first step, a client identifies himself with a player key, and gets his player id ("identification" function).
+In a second step, the client makes himself available for connection ("connect" function).
+
+"""
+
+from flask import Flask
+from flask import request, render_template, redirect, url_for, flash, make_response
+from flask import json, jsonify
+
 import sqlite3
-from flask import Flask, request, render_template, redirect, url_for, flash, make_response
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
 from sqlalchemy import func
-from database import db_session
-from models import Session, Test, Stat, Item, Connection, Player
-from flask import json, jsonify
+
 import re
 import time
 from random import randint
 from threading import Thread, Lock
-import utils
-# for py2exe
+
+# for py2exe to correctly import jinja2
 import jinja2.ext
 
+from database import db_session
+from models import Session, Test, Stat, Item, Connection, Player
+import utils
+
+# We load the general settings
+settings = utils.read_settings()
+
 app = Flask(__name__)
-app.secret_key = 'some_secret'
+app.secret_key = settings.flask.secret_key
+app.debug = settings.flask.debug
+app.ext = settings.flask.ext
 
-app.debug = True
-
-app.ext = True
-
-app.lock_connections = Lock()
+# Lock used in the identification phase
 app.lock_players = Lock()
+# Lock used in the connection phase
+app.lock_connections = Lock()
 
-@app.route('/', methods=["GET"])
-def index():
-    return redirect(url_for("view_index"))
+
+
+#########################################
+# Players identification and connection #
+#########################################
+
+
 
 @app.route("/identification/", methods=["POST"])
 def indentification():
+    """
+    Checks the validity of a key sent by a client in the POST arguments
+    Returns the player id if the identification is successful
+    """
+    # We first check if the required field is sent
     if "key" in request.form:
         key = request.form["key"]
-        print(key)
         print("    [ {} waiting for the players lock... ]".format(key))
+        # We wait for the connection lock
+        # This lock is used to ensure that no 2 client can connect with the same key
         app.lock_connections.acquire()
         print("    [ {} has acquired the players lock... ]".format(key))
+        # We check if the key exists and is not already used
         try:
             player = db_session.query(Player).filter_by(key=key).one()
             if player.in_use == 0:
+                # The key is now used
                 player.in_use = 1
                 db_session.commit()
                 return jsonify(status=1, data={"player_id": player.id}, text="Identification successful...")
             else:
+                # The key is already used
                 return jsonify(status=-1, data={"player_id": player.id}, text="Key already in use!\nPlease enter another key...")
             
         except NoResultFound as e:
@@ -50,10 +84,11 @@ def indentification():
             print(e)
             return jsonify(status=-1, text="Server error, try again please."), 500
         finally:
+            # Once the database interaction is over, we release the connection lock
             print("    [ {} has released the connections lock ]".format(key))
             app.lock_connections.release()
-            
     else:
+        # The required field was not sent
         key = None
         return jsonify(status=0, text="Wrong request!"), 400
 
@@ -62,14 +97,18 @@ def indentification():
 
 @app.route("/connect/", methods=["POST"])
 def connect():
-    # TODO: handle disconnection case/script crash and
-    # player has already been connected but try to reconnect
-    start = time.time()
+    """
+    A client makes himself available for connetion giving his player id in the POST request
+    If he is successfuly added to available players, the connection id is returned and  a thread is launched to find another available player
+    """
     player_id = int(request.form["id"])
     print("    [ {} waiting for the connections lock... ]".format(player_id))
+    # We wait for the connection lock
+    # The lock is used for integrity, to ensure the connection by pair
     app.lock_connections.acquire()
     print("    [ {} has acquired the connections lock... ]".format(player_id))
     try:
+        # We add the player to the players available for connection
         player = Player.query.get(player_id)
         conn = Connection(player_id)
         conn_id = None
@@ -78,47 +117,60 @@ def connect():
         db_session.commit()
         conn_id = conn.id
         print("Added to db...")
-        end = time.time()
+        # We launch a new thread to connect the player with another available player
         thread = Thread(target=connect_player, args=(player_id,), name="Connect-Player-{}".format(player_id))
         thread.start()
         return jsonify(status=1, data=conn_id, text="Added to available players...")
     except NoResultFound:
+        # The player does not exists
         return jsonify(satus=0, data=None, text="This player does not exists!")
     except Exception as e:
+        # Server error
         print(e)
         return jsonify(satus=-1, data=None, text="Server error...")
     finally:
+        # Finally we release the connection lock
         app.lock_connections.release()
         print("    [ {} has released the connections lock ]".format(player_id))    
     
 
-def connect_player(player_id):
-    start = time.time()
 
+def connect_player(player_id):
+    """
+    For a specific player, looks for another available player and connects to him
+    In this setting, only players with same session number and pair can be connected, but this can be removed
+    """
+
+    # We get the corresponding player
     try:
         player = Player.query.get(player_id)
     except:
+        # if the player does not exist, we stop
         return 0
     
     connected = False
  
     while not connected:
+        # We loop until we find an available player
         print("    [ {} waiting for connections the lock... ]".format(player_id))
+        # We wait for the connection lock
         app.lock_connections.acquire()
         print("    [ {} has acquired the connections lock... ]".format(player_id))
 
+        # We refresh the player values to see if it has been connected already
         player = Player.query.get(player_id)
-        print(player)
         conn = player.connection
-        print(player.connection)
-        
+                
         if conn.connected_player_id is not None:
+            # The player has already been connected
             connected = True
             app.lock_connections.release()
         else:
+            # We look for the other player
             q = db_session.query(Connection).join(Connection.players).filter(Connection.player_id!=player_id, Connection.status==0, Player.session_nr==player.session_nr, Player.pair==player.pair)
             try:
                 conn_with = q.first()
+                # We connect the 2 players and assign the roles
                 conn.status = 1
                 conn.connected_player_id = conn_with.players.id
                 conn.role = 0
@@ -129,33 +181,44 @@ def connect_player(player_id):
                 connected = True
                 print("Connected {} with {}".format(conn.player_id, conn_with.player_id))
             except Exception as e:
+                # No player was found, we cancel any database modification
                 db_session.rollback()
-                print(e)
                 print("No other player available... New attempt...")
             finally:
+                # We release the lock
                 app.lock_connections.release()
 
         print("    [ {} has released the connections lock ]".format(player_id))        
         if not connected:
+            # We wait before attempting again
             time.sleep(1)
-
-    end = time.time()    
+    
     return 0
+
 
 
 @app.route("/connected_with/<string:player_id>", methods=["GET"])
 def connected_with(player_id):
+    """
+    For a specific player, returns the connected player if it is connected
+    """
+
     print("    [ {} waiting for connections the lock... ]".format(player_id))
+    # We wait for the connection lock
     app.lock_connections.acquire()
     print("    [ {} has acquired the connections lock... ]".format(player_id))
+    # We look if the player is connected and with whom
     try:
         player = Player.query.get(player_id)
         conn = player.connection
         
         if conn is None:
+            # The player is not available for connection
             return jsonify(status=0, data=None, text="Player not available for connection!")
         if conn.connected_player_id is None:
+            # The player has not been connected
             return jsonify(status=0, data=None, text="Not connected yet...")
+        # We return as connection_id the connection id of the player with role 1 in the pair
         if conn.role == 1:
             connection_id = conn.id
         else:
@@ -163,12 +226,13 @@ def connected_with(player_id):
             
         return jsonify(status=1, data={"connection_id":connection_id, "connected_player_name": conn.connected_player.name, "connected_player_id": conn.connected_player.id, "role":conn.role}, text="OK")
     except NoResultFound as e:
-        print(e)
+        # The player does not exist
         return jsonify(status=0, data=None, text="This player does not exist!")
     except Exception as e:
-        print(e)
+        # Server error
         return jsonify(status=-1, data=None, text="Server error..."), 500
     finally:
+        # Finally we release the lock
         app.lock_connections.release()
         print("    [ {} has released the connections lock ]".format(player_id))
 
@@ -176,16 +240,24 @@ def connected_with(player_id):
 
 @app.route("/disconnect/<string:player_id>", methods=["GET"])
 def disconnect(player_id):
+    """
+    Disconnects a player and the connected player
+    """
+    
     print("    [ {} waiting for connections the lock... ]".format(player_id))
+    # We wait for the connection lock
     app.lock_connections.acquire()
     print("    [ {} has acquired the connections lock... ]".format(player_id))
+    # We look for the player and disconnect him and the connected player
     try:
         player = Player.query.get(player_id)
         conn = player.connection
         player.in_use = 0
         if conn is None:
+            # The player is not connected
             return jsonify(status=1, data=None, text="Player not connected.")
         else:
+            # We disconnect the player and the connected player
             db_session.delete(conn)
             if player.connection_other:
                 connected_player_conn = player.connection_other
@@ -195,12 +267,13 @@ def disconnect(player_id):
             db_session.commit()
             return jsonify(status=1, data=None, text="Player disconnected.")
     except NoResultFound as e:
-        print(e)
+        # Either the player does not exist or it has already been disconnected
         return jsonify(status=0, data=None, text="Player not found in connections!\nEither it does not exists or it has already been disconnected.")
     except Exception as e:
-        print(e)
+        # Server error
         return jsonify(status=-1, data=None, text="Server error..."), 500
     finally:
+        # Finally we realease the lock
         app.lock_connections.release()
         print("    [ {} has released the connections lock ]".format(player_id))
 
@@ -208,34 +281,56 @@ def disconnect(player_id):
 
 @app.route('/upload_json/', methods=['GET', 'POST'])
 def upload_json():
+    """
+    Handles the JSON coming from Minecraft client containing statistics
+    """
     if request.method == 'POST':
-        #TODO:
-        # check if JSON
+        # We get the JSON
         data = request.get_json(silent=True)
         if data:
-            print(data)
+            # We add the statistics to the database
             try:
                 add_stats_to_db(data)
                 return "Stats added to db.", 200
             except Exception as e:
-                print(e)
+                # Exception when adding statistics
                 return "Problem adding stats to db: {}".format(e), 400
-            
         else:
-            print("No JSON")
+            # No JSON was sent
             return "No JSON data was sent!", 400
     else:
         return "Only POST requests are accepted.", 400
 
+
+
+#########################################
+# Web interface for managing statistics #
+#########################################
+
+# Templates are located in templates/ folder
+# view_data.djhtml is the main templates for displaying generic data
+# using columns and data arguments
+
+@app.route('/', methods=["GET"])
+def index():
+    """By default, the user is redirected to the managing interface"""
+
+    return redirect(url_for("view_index"))
+
+
     
 @app.route("/view/")
 def view_index():
+    """Main interface for managing statistics and players"""
+
     return render_template("index.djhtml", title="Monitoring")
 
 
 
 @app.route("/view/connections/")
 def view_connections():
+    """Shows the current connections"""
+
     columns = [c.name for c in Connection.__table__.columns]
     connections = db_session.query(Connection).all()
     return render_template("view_data.djhtml", title="Connections", columns=columns, data=connections)
@@ -244,9 +339,13 @@ def view_connections():
 
 @app.route("/view/sessions/")
 def view_sessions():
+    """Shows the saved sessions in the database"""
+
     columns = [c.name for c in Session.__table__.columns]
+    # We add the link to the tests of the session
     columns.append("view_tests")
     sessions = db_session.query(Session).all()
+    # For each tests in the session we get the corresponding id
     [setattr(session, "view_tests", "/view/tests/{}".format(session.id)) for session in sessions]
     
     return render_template("view_data.djhtml", title="Sessions", columns=columns, data=sessions)
@@ -255,29 +354,43 @@ def view_sessions():
 
 @app.route("/view/tests/<int:session_id>")
 def view_tests(session_id):
+    """Show the tests of a specific session"""
+    
     columns = [c.name for c in Test.__table__.columns]
+    # We add the link to the stats and items of the test
     columns.append("view_stats")
     columns.append("view_items")
     tests = db_session.query(Test).filter_by(session_id=session_id).all()
+    # For each stats and items in the test we get the corresponding id
     [setattr(test, "view_stats", "/view/stats/{}".format(test.id)) for test in tests]
     [setattr(test, "view_items", "/view/items/{}".format(test.id)) for test in tests]   
+
     return render_template("view_data.djhtml", title="Tests for session {}".format(session_id), columns=columns, data=tests, back="/view/sessions/")
+
 
 
 @app.route("/view/stats/<int:test_id>")
 def view_stats(test_id):
+    """Show the stats for a specific test"""
+    
     columns = [c.name for c in Stat.__table__.columns]
+    # We remove columns we do not want to show
     columns.remove("position_over_time")
     stats = db_session.query(Stat).filter_by(test_id=test_id).all()
+    # pretty print for the position_over_time field
     # for stat in stats:
     #     stat.position_over_time = {k: json.loads(v) for (k,v) in json.loads(stat.position_over_time).items()}
     session_id = db_session.query(Test).get(test_id).session_id
+
     return render_template("view_data.djhtml", title="Stats for test {}".format(test_id), columns=columns, data=stats, back="/view/tests/{}".format(session_id))
 
 
 @app.route("/view/items/<int:test_id>")
 def view_items(test_id):
+    """Show the items for a specific test"""
+    
     columns = [c.name for c in Item.__table__.columns]
+    # We remove columns we do not want to show
     columns.remove("id")
     columns.remove("test_id")
     columns.remove("item_item")
@@ -419,7 +532,10 @@ def add_stats_to_db(data):
     round = data['round']
     player_id = data['player']
     stats = json.loads(data['stats'])
-    position_over_time = data['position_over_time']
+    try:
+        position_over_time = data['position_over_time']
+    except Exception as e:
+        print(e)
     solution = data['solution']
     checkpoints = data['checkpoints']
         
@@ -449,7 +565,10 @@ def add_stats_to_db(data):
 
     items = []
 
-    stat.position_over_time = json.dumps(position_over_time)
+    try:
+        stat.position_over_time = json.dumps(position_over_time)
+    except Exception as e:
+        print(e)
     stat.checkpoints = json.dumps(checkpoints)
     stat.solution = solution
     

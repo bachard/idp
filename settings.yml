@@ -1,5 +1,9 @@
+flask:
+    secret_key: minecraft
+    debug: True
+    ext: True
 server:
-    address: 127.0.0.1
+    address: 192.168.2.105
     port: 1234
 minecraft:
     path: C:\Users\bib\AppData\Roaming\.minecraft\bin\launcher.jar
