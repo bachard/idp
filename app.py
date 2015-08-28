@@ -17,7 +17,7 @@ from flask import json, jsonify
 
 import sqlite3
 from sqlalchemy.orm.exc import MultipleResultsFound, NoResultFound
-from sqlalchemy import func
+from sqlalchemy import func, desc
 
 import re
 import time
@@ -346,6 +346,7 @@ def add_stats_to_db(data):
         stat.position_over_time = json.dumps(position_over_time)
     except Exception as e:
         print(e)
+
     stat.checkpoints = json.dumps(checkpoints)
     stat.solution = solution
     stat.score = score
@@ -533,9 +534,32 @@ def view_sessions_csv():
 @app.route("/players/")
 def players():
     """Interface for managing players"""
+    update_players_score()
     sessions = [s for s in db_session.query(Player.session_nr, func.count(Player.pair)).group_by(Player.session_nr).all()]
     return render_template("players.djhtml", title="Manage players", sessions=sessions)
 
+
+
+def update_players_score():
+    """Updates the score for each player"""
+    for player in db_session.query(Player).all():
+        try:
+            last_test = db_session.query(Test).join(Stat).filter(Stat.player_id==player.id).order_by(desc(Test.timestamp)).one()
+            score = 0
+            team_score_avg = []
+            team_score_max = 0
+            for stat in last_test.stats:
+                team_score_avg.append(stat.score)
+                if stat.score > team_score_max:
+                    team_score_max = stat.score
+                if stat.player_id == player.id:
+                    score = stat.score
+            player.score = score
+            player.team_score_avg = float(sum(team_score_avg)) / len(team_score_avg)
+            player.team_score_max = team_score_max
+            db_session.commit()            
+        except Exception as e:
+            print(e)
 
 
 @app.route("/players/<int:session_nr>")
@@ -544,6 +568,7 @@ def view_players(session_nr):
     Shows the players of a specific session
     Several fields can be modified
     """
+    update_players_score()
     columns = [c.name for c in Player.__table__.columns]
     # Specificies the modifiable fields
     modifiable = ["name", "condition", "player_condition"]
