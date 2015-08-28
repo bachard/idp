@@ -35,9 +35,9 @@ import utils
 settings = utils.read_settings()
 
 app = Flask(__name__)
-app.secret_key = settings.flask.secret_key
-app.debug = settings.flask.debug
-app.ext = settings.flask.ext
+app.secret_key = settings["flask"]["secret_key"]
+app.debug = settings["flask"]["debug"]
+app.ext = settings["flask"]["ext"]
 
 # Lock used in the identification phase
 app.lock_players = Lock()
@@ -314,7 +314,8 @@ def add_stats_to_db(data):
     position_over_time = data['position_over_time']
     solution = data['solution']
     checkpoints = data['checkpoints']
-        
+    score = int(data['score'])
+    
     # try to find if the session has already been created
     # if not: create a new one
     try:
@@ -347,9 +348,8 @@ def add_stats_to_db(data):
         print(e)
     stat.checkpoints = json.dumps(checkpoints)
     stat.solution = solution
+    stat.score = score
     
-    print(test)
-    print(stats)
     items = {}
     
     for (k,v) in stats.items():

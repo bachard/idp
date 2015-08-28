@@ -8,8 +8,6 @@ from utils import read_settings
 
 settings = read_settings()
 
-
-
 url = "http://{}:{}/upload_json/".format(settings["server"]["address"], settings["server"]["port"])
 
 headers = {"Content-type": "application/json", "Accept": "text/plain"}
@@ -25,6 +23,7 @@ data = {
     "checkpoints": "test",
     "position_over_time": "test",
     "solution": "solution 1",
+    "score": 100,
     "stats": json.dumps(stats)
 }
 

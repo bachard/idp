@@ -3,7 +3,7 @@ flask:
     debug: True
     ext: True
 server:
-    address: 192.168.2.105
+    address: 127.0.0.1
     port: 1234
 minecraft:
     path: C:\Users\bib\AppData\Roaming\.minecraft\bin\launcher.jar
@@ -11,4 +11,4 @@ minecraft:
     server_file: server.txt
 java:
     path: C:\Program Files (x86)\Java\jre7\bin\java.exe
-database: sqlite:///database.db
+database: mysql+pymysql://root:bib@localhost/minecraft
