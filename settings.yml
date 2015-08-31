@@ -11,4 +11,4 @@ minecraft:
     server_file: server.txt
 java:
     path: C:\Program Files (x86)\Java\jre7\bin\java.exe
-database: mysql+pymysql://root:bib@localhost/minecraft
+database: sqlite:///database.db

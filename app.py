@@ -77,7 +77,7 @@ def indentification():
             else:
                 # The key is already used
                 return jsonify(status=-1, data={"player_id": player.id}, text="Key already in use!\nPlease enter another key...")
-            
+
         except NoResultFound as e:
             return jsonify(status=0, text="You entered a wrong key! Try again...")
         except Exception as e:
@@ -93,7 +93,7 @@ def indentification():
         return jsonify(status=0, text="Wrong request!"), 400
 
 
-    
+
 
 @app.route("/connect/", methods=["POST"])
 def connect():
@@ -131,8 +131,8 @@ def connect():
     finally:
         # Finally we release the connection lock
         app.lock_connections.release()
-        print("    [ {} has released the connections lock ]".format(player_id))    
-    
+        print("    [ {} has released the connections lock ]".format(player_id))
+
 
 
 def connect_player(player_id):
@@ -147,9 +147,9 @@ def connect_player(player_id):
     except:
         # if the player does not exist, we stop
         return 0
-    
+
     connected = False
- 
+
     while not connected:
         # We loop until we find an available player
         print("    [ {} waiting for connections the lock... ]".format(player_id))
@@ -160,7 +160,7 @@ def connect_player(player_id):
         # We refresh the player values to see if it has been connected already
         player = Player.query.get(player_id)
         conn = player.connection
-                
+
         if conn.connected_player_id is not None:
             # The player has already been connected
             connected = True
@@ -188,11 +188,11 @@ def connect_player(player_id):
                 # We release the lock
                 app.lock_connections.release()
 
-        print("    [ {} has released the connections lock ]".format(player_id))        
+        print("    [ {} has released the connections lock ]".format(player_id))
         if not connected:
             # We wait before attempting again
             time.sleep(1)
-    
+
     return 0
 
 
@@ -211,7 +211,7 @@ def connected_with(player_id):
     try:
         player = Player.query.get(player_id)
         conn = player.connection
-        
+
         if conn is None:
             # The player is not available for connection
             return jsonify(status=0, data=None, text="Player not available for connection!")
@@ -223,7 +223,7 @@ def connected_with(player_id):
             connection_id = conn.id
         else:
             connection_id = conn.connected_player.connection.id
-            
+
         return jsonify(status=1, data={"connection_id":connection_id, "connected_player_name": conn.connected_player.name, "connected_player_id": conn.connected_player.id, "role":conn.role}, text="OK")
     except NoResultFound as e:
         # The player does not exist
@@ -243,7 +243,7 @@ def disconnect(player_id):
     """
     Disconnects a player and the connected player
     """
-    
+
     print("    [ {} waiting for connections the lock... ]".format(player_id))
     # We wait for the connection lock
     app.lock_connections.acquire()
@@ -294,6 +294,7 @@ def upload_json():
                 return "Stats added to db.", 200
             except Exception as e:
                 # Exception when adding statistics
+                print("Problem adding stats to db: {}".format(e))
                 return "Problem adding stats to db: {}".format(e), 400
         else:
             # No JSON was sent
@@ -311,11 +312,18 @@ def add_stats_to_db(data):
     round = data['round']
     player_id = data['player']
     stats = json.loads(data['stats'])
-    position_over_time = data['position_over_time']
-    solution = data['solution']
+    try:
+        position_over_time = data['position_over_time']
+    except Exception as e:
+        print(e)
+        position_over_time = None
+    try:
+        solution = data['solution']
+    except Exception as e:
+        solution = "Not implemented"
     checkpoints = data['checkpoints']
     score = int(data['score'])
-    
+
     # try to find if the session has already been created
     # if not: create a new one
     try:
@@ -325,12 +333,12 @@ def add_stats_to_db(data):
         except:
             test = Test(session.id, world, round)
             session.tests.append(test)
-        
+
     except:
         session = Session(session_uuid)
         test = Test(session.id, world, round)
         session.tests.append(test)
-                       
+
     # try to find an existing stat for the player
     # if yes: update it
     # if not: create it
@@ -350,9 +358,9 @@ def add_stats_to_db(data):
     stat.checkpoints = json.dumps(checkpoints)
     stat.solution = solution
     stat.score = score
-    
+
     items = {}
-    
+
     for (k,v) in stats.items():
         k = k.split('.')
         attr = k[0]
@@ -393,14 +401,14 @@ def add_stats_to_db(data):
             test.items.append(item)
             setattr(item, 'item_item', item_id)
 
-        for (action, n) in item_values.items():    
+        for (action, n) in item_values.items():
             setattr(item, action, n)
 
     db_session.add(session)
     db_session.commit()
 
 
-    
+
 #########################################
 # Web interface for managing statistics #
 #########################################
@@ -417,7 +425,7 @@ def index():
     return redirect(url_for("view_index"))
 
 
-    
+
 @app.route("/view/")
 def view_index():
     """Main interface for managing statistics and players"""
@@ -446,7 +454,7 @@ def view_sessions():
     sessions = db_session.query(Session).all()
     # For each tests in the session we get the corresponding id
     [setattr(session, "view_tests", "/view/tests/{}".format(session.id)) for session in sessions]
-    
+
     return render_template("view_data.djhtml", title="Sessions", columns=columns, data=sessions)
 
 
@@ -454,7 +462,7 @@ def view_sessions():
 @app.route("/view/tests/<int:session_id>")
 def view_tests(session_id):
     """Show the tests of a specific session"""
-    
+
     columns = [c.name for c in Test.__table__.columns]
     # We add the link to the stats and items of the test
     columns.append("view_stats")
@@ -462,7 +470,7 @@ def view_tests(session_id):
     tests = db_session.query(Test).filter_by(session_id=session_id).all()
     # For each stats and items in the test we get the corresponding id
     [setattr(test, "view_stats", "/view/stats/{}".format(test.id)) for test in tests]
-    [setattr(test, "view_items", "/view/items/{}".format(test.id)) for test in tests]   
+    [setattr(test, "view_items", "/view/items/{}".format(test.id)) for test in tests]
 
     return render_template("view_data.djhtml", title="Tests for session {}".format(session_id), columns=columns, data=tests, back="/view/sessions/")
 
@@ -471,7 +479,7 @@ def view_tests(session_id):
 @app.route("/view/stats/<int:test_id>")
 def view_stats(test_id):
     """Show the stats for a specific test"""
-    
+
     columns = [c.name for c in Stat.__table__.columns]
     # We remove columns we do not want to show
     columns.remove("position_over_time")
@@ -490,7 +498,7 @@ def view_stats(test_id):
 @app.route("/view/items/<int:test_id>")
 def view_items(test_id):
     """Show the items for a specific test"""
-    
+
     columns = [c.name for c in Item.__table__.columns]
     # We remove columns we do not want to show
     columns.remove("id")
@@ -506,7 +514,7 @@ def view_items(test_id):
 
     # Link to go back to the tests
     session_id = db_session.query(Test).get(test_id).session_id
-    
+
     return render_template("view_data.djhtml", title="Items for test {}".format(test_id), columns=columns, data=items, back="/view/tests/{}".format(session_id))
 
 
@@ -540,6 +548,22 @@ def players():
 
 
 
+@app.route("/players/<int:session_nr>")
+def view_players(session_nr):
+    """
+    Shows the players of a specific session
+    Several fields can be modified
+    """
+    update_players_score()
+    columns = [c.name for c in Player.__table__.columns]
+    # Specificies the modifiable fields
+    modifiable = ["name", "condition", "player_condition"]
+    # Link to the target of the AJAX POST request for modifiying fields
+    action = "/players/update/"
+    players = db_session.query(Player).filter_by(session_nr=session_nr).all()
+    return render_template("view_data.djhtml", title="Players for session {}".format(session_nr), id=session_nr, columns=columns, data=players, modifiable=modifiable, action=action, back="/players/")
+
+
 def update_players_score():
     """Updates the score for each player"""
     for player in db_session.query(Player).all():
@@ -557,26 +581,9 @@ def update_players_score():
             player.score = score
             player.team_score_avg = float(sum(team_score_avg)) / len(team_score_avg)
             player.team_score_max = team_score_max
-            db_session.commit()            
+            db_session.commit()
         except Exception as e:
-            print(e)
-
-
-@app.route("/players/<int:session_nr>")
-def view_players(session_nr):
-    """
-    Shows the players of a specific session
-    Several fields can be modified
-    """
-    update_players_score()
-    columns = [c.name for c in Player.__table__.columns]
-    # Specificies the modifiable fields
-    modifiable = ["name", "condition", "player_condition"]
-    # Link to the target of the AJAX POST request for modifiying fields
-    action = "/players/update/"
-    players = db_session.query(Player).filter_by(session_nr=session_nr).all()
-    return render_template("view_data.djhtml", title="Players for session {}".format(session_nr), id=session_nr, columns=columns, data=players, modifiable=modifiable, action=action, back="/players/")
-
+            pass
 
 
 @app.route("/players/create/", methods=["POST"])
@@ -611,7 +618,7 @@ def create_players():
                 except Exception as e:
                     # Unknown exception
                     flash("An exception has occured!<br />Exception message: {}".format(e))
-                
+
         except ValueError as e:
             # The parameter was not an int
             flash("The argument is invalid! You did not pass an integer as parameter...")
@@ -642,7 +649,7 @@ def update_player():
         return jsonify(status=0, text="No JSON provided!")
 
 
-    
+
 
 @app.route("/players/export/csv/<int:session_number>", methods=["GET"])
 def export_csv_players(session_number):
@@ -679,7 +686,7 @@ def export_allocation_players(session_number):
 def shutdown_session(exception=None):
     db_session.remove()
 
-    
+
 
 if __name__ == '__main__':
     if not app.ext:
