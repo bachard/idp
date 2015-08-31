@@ -144,36 +144,7 @@ class Item(Base):
         return s
     
 
-class Connection(Base):
-    """Base model for all connections stored in DB"""
-    __tablename__ = "connections"
 
-    id = Column(Integer, primary_key=True)
-    player_id = Column(Integer, ForeignKey("players.id"), nullable=False, unique=True) # ID of the player
-    connected_player_id = Column(Integer, ForeignKey("players.id"), nullable=True) # ID of the connected player
-    status = Column(Integer) # status of the connection
-    role = Column(Integer) # role of the player in the connection (0 or 1)
-    
-    connected_player = relationship("Player", foreign_keys=[connected_player_id])
-    
-    def __init__(self, player_id):
-        self.player_id = player_id 
-        self.status = 0
-        self.connected_player_id = None
-        self.role = None
-        
-    
-    def __repr__(self):
-        s = "player {}, status {}, connected with {}".format(self.player_id, self.status, self.connected_player_id)
-        return s
-    
-    def to_dict(self):
-        return {
-            "connected_player_id": self.connected_player_id,
-            "role": self.role
-        }
-            
-        
 class Player(Base):
     """Base model for all players stored in DB"""
     __tablename__ = "players"
@@ -184,31 +155,30 @@ class Player(Base):
     name = Column(String(40)) # name of the player
     in_use = Column(Boolean) # whether the player is active or not
     session_nr = Column(Integer) # number of the session
-    pair = Column(Integer) # number of the pair
+    pool = Column(Integer) # number of the pool of players
     condition = Column(Integer) # number of the condition
     player_condition = Column(Integer) # number of the player condition
+    conn_id = Column(Integer) # id of the connection
+    role = Column(Integer) # role of the player
 
     score = Column(Integer, default=0)
     team_score_avg = Column(Float, default=0.0)
     team_score_max = Column(Float, default=0.0)
     
-    # Reference to the connection
-    connection = relationship("Connection", foreign_keys=[Connection.player_id], backref="players", uselist=False, cascade="all, delete, delete-orphan")
-    # Reference to the connected player connection
-    connection_other = relationship("Connection", foreign_keys=[Connection.connected_player_id], uselist=False, cascade="all, delete, delete-orphan")
-
-    def __init__(self, key, name, session_nr, pair, condition=0, player_condition=0):
+    def __init__(self, key, name, session_nr, pool, conn_id, role, condition=0, player_condition=0):
         self.key = key
         self.name = name
         self.session_nr = session_nr
-        self.pair = pair
+        self.pool = pool
+        self.conn_id = conn_id
+        self.role = role
         self.condition = condition
         self.player_condition = player_condition
         self.in_use = 0
 
         
     def __repr__(self):
-        s = "key {}, name {}, used {}, session nr {}, pair {}, condition {}, player condition {}".format(self.key, self.name, self.in_use, self.session_nr, self.pair, self.condition, self.player_condition)
+        s = "id {}, key {}, name {}, used {}, session nr {}, pool {}".format(self.id, self.key, self.name, self.in_use, self.session_nr, self.pool)
         return s
 
 

@@ -69,6 +69,8 @@ class Application(tk.Frame):
             self.field_connect["text"] = d["text"]
             self.field_connect["text"] += "\nConnecting to server..."
             self.player_id = d["data"]["player_id"]
+            self.conn_id = d["data"]["conn_id"]
+            self.role = d["data"]["role"]
             print(self.player_id)
             print(self.field_connect["text"])
             self.master.after(100, self.callback_connection)
@@ -79,38 +81,20 @@ class Application(tk.Frame):
             print(self.field_connect["text"])
 
     def callback_connection(self):
-        """Sets the player available for connection"""
-        d = self.get_data("connect/", method="POST", data={"id":self.player_id})
-
-        if d["status"] == 1:
-            self.field_connect["text"] = "Searching for other player..."
-            self.master.after(100, self.callback_wait_for_connection)
-        
-    def callback_wait_for_connection(self):
-        """Wait until the player is connected"""
-        connected = False
-        while not connected:
-            d = self.get_data("connected_with/{}".format(self.player_id))
-            if d["status"] == 1:
-                connected = True
-                d = d["data"]
-            else:
-                time.sleep(2)
-                self.field_connect["text"] = d["text"]
-
-        if d["role"] == 0:
-            role = "Client"
-        elif d["role"] == 1:
+        """Sets the connection settings"""
+        if self.role == 0:
             role = "Main"
+        else:
+            role = "Client"
         # Once the player is connected, we write the Minecraft connection files        
         with open(self.settings["minecraft"]["connection_file"], 'w') as f:
-            f.write("{}\n{}\n".format(role, d["connection_id"]))
+            f.write("{}\n{}\n".format(role, self.conn_id))
 
         with open(self.settings["minecraft"]["server_file"], 'w') as f:
-            f.write("{}\n{}\n{}".format(self.server_root+"upload_json/", self.player_id, d["connected_player_id"]))
+            f.write("{}\n{}\n".format(self.server_root+"upload_json/", self.player_id))
 
         # Client is ready to launch the game
-        self.field_connect["text"] = "Connected with {} as {}".format(d["connected_player_name"], role)
+        self.field_connect["text"] = "Connected and ready to play!"
         print(self.field_connect["text"])
         self.button_connect["text"] = "Play!"
         self.button_connect["command"] = self.play

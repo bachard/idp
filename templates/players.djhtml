@@ -17,6 +17,10 @@
                     <label for="number_players">Number of players</label>
                     <input type="text" class="form-control" id="number_players" name="number_players" placeholder="number of players (ex. 12)">
                 </div>
+                <div class="form-group">
+                    <label for="pool_size">Size of each pool</label>
+                    <input type="text" class="form-control" id="pool_size" name="pool_size" placeholder="size of each pool (ex. 3)">
+                </div>
                 <button class="btn btn-default">Create players!</button>
             </form>
         </div>
@@ -44,7 +48,7 @@
                     {% endfor %}
                 </table>
             {% else %}
-                <h3>No data available</h3>
+                <h3>No players created yet!</h3>
             {% endif %}
         </div>
     </div>

@@ -28,7 +28,7 @@ from threading import Thread, Lock
 import jinja2.ext
 
 from database import db_session
-from models import Session, Test, Stat, Item, Connection, Player
+from models import Session, Test, Stat, Item, Player
 import utils
 
 # We load the general settings
@@ -39,8 +39,6 @@ app.secret_key = settings["flask"]["secret_key"]
 app.debug = settings["flask"]["debug"]
 app.ext = settings["flask"]["ext"]
 
-# Lock used in the identification phase
-app.lock_players = Lock()
 # Lock used in the connection phase
 app.lock_connections = Lock()
 
@@ -73,10 +71,10 @@ def indentification():
                 # The key is now used
                 player.in_use = 1
                 db_session.commit()
-                return jsonify(status=1, data={"player_id": player.id}, text="Identification successful...")
+                return jsonify(status=1, data={"player_id": player.id, "conn_id": player.conn_id, "role": player.role}, text="Identification successful...")
             else:
                 # The key is already used
-                return jsonify(status=-1, data={"player_id": player.id}, text="Key already in use!\nPlease enter another key...")
+                return jsonify(status=-1, text="Key already in use!\nPlease enter another key...")
 
         except NoResultFound as e:
             return jsonify(status=0, text="You entered a wrong key! Try again...")
@@ -94,150 +92,6 @@ def indentification():
 
 
 
-
-@app.route("/connect/", methods=["POST"])
-def connect():
-    """
-    A client makes himself available for connetion giving his player id in the POST request
-    If he is successfuly added to available players, the connection id is returned and  a thread is launched to find another available player
-    """
-    player_id = int(request.form["id"])
-    print("    [ {} waiting for the connections lock... ]".format(player_id))
-    # We wait for the connection lock
-    # The lock is used for integrity, to ensure the connection by pair
-    app.lock_connections.acquire()
-    print("    [ {} has acquired the connections lock... ]".format(player_id))
-    try:
-        # We add the player to the players available for connection
-        player = Player.query.get(player_id)
-        conn = Connection(player_id)
-        conn_id = None
-        print("Adding to db...")
-        db_session.add(conn)
-        db_session.commit()
-        conn_id = conn.id
-        print("Added to db...")
-        # We launch a new thread to connect the player with another available player
-        thread = Thread(target=connect_player, args=(player_id,), name="Connect-Player-{}".format(player_id))
-        thread.start()
-        return jsonify(status=1, data=conn_id, text="Added to available players...")
-    except NoResultFound:
-        # The player does not exists
-        return jsonify(satus=0, data=None, text="This player does not exists!")
-    except Exception as e:
-        # Server error
-        print(e)
-        return jsonify(satus=-1, data=None, text="Server error...")
-    finally:
-        # Finally we release the connection lock
-        app.lock_connections.release()
-        print("    [ {} has released the connections lock ]".format(player_id))
-
-
-
-def connect_player(player_id):
-    """
-    For a specific player, looks for another available player and connects to him
-    In this setting, only players with same session number and pair can be connected, but this can be removed
-    """
-
-    # We get the corresponding player
-    try:
-        player = Player.query.get(player_id)
-    except:
-        # if the player does not exist, we stop
-        return 0
-
-    connected = False
-
-    while not connected:
-        # We loop until we find an available player
-        print("    [ {} waiting for connections the lock... ]".format(player_id))
-        # We wait for the connection lock
-        app.lock_connections.acquire()
-        print("    [ {} has acquired the connections lock... ]".format(player_id))
-
-        # We refresh the player values to see if it has been connected already
-        player = Player.query.get(player_id)
-        conn = player.connection
-
-        if conn.connected_player_id is not None:
-            # The player has already been connected
-            connected = True
-            app.lock_connections.release()
-        else:
-            # We look for the other player
-            q = db_session.query(Connection).join(Connection.players).filter(Connection.player_id!=player_id, Connection.status==0, Player.session_nr==player.session_nr, Player.pair==player.pair)
-            try:
-                conn_with = q.first()
-                # We connect the 2 players and assign the roles
-                conn.status = 1
-                conn.connected_player_id = conn_with.players.id
-                conn.role = 0
-                conn_with.status = 1
-                conn_with.connected_player_id = conn.players.id
-                conn_with.role = 1
-                db_session.commit()
-                connected = True
-                print("Connected {} with {}".format(conn.player_id, conn_with.player_id))
-            except Exception as e:
-                # No player was found, we cancel any database modification
-                db_session.rollback()
-                print("No other player available... New attempt...")
-            finally:
-                # We release the lock
-                app.lock_connections.release()
-
-        print("    [ {} has released the connections lock ]".format(player_id))
-        if not connected:
-            # We wait before attempting again
-            time.sleep(1)
-
-    return 0
-
-
-
-@app.route("/connected_with/<string:player_id>", methods=["GET"])
-def connected_with(player_id):
-    """
-    For a specific player, returns the connected player if it is connected
-    """
-
-    print("    [ {} waiting for connections the lock... ]".format(player_id))
-    # We wait for the connection lock
-    app.lock_connections.acquire()
-    print("    [ {} has acquired the connections lock... ]".format(player_id))
-    # We look if the player is connected and with whom
-    try:
-        player = Player.query.get(player_id)
-        conn = player.connection
-
-        if conn is None:
-            # The player is not available for connection
-            return jsonify(status=0, data=None, text="Player not available for connection!")
-        if conn.connected_player_id is None:
-            # The player has not been connected
-            return jsonify(status=0, data=None, text="Not connected yet...")
-        # We return as connection_id the connection id of the player with role 1 in the pair
-        if conn.role == 1:
-            connection_id = conn.id
-        else:
-            connection_id = conn.connected_player.connection.id
-
-        return jsonify(status=1, data={"connection_id":connection_id, "connected_player_name": conn.connected_player.name, "connected_player_id": conn.connected_player.id, "role":conn.role}, text="OK")
-    except NoResultFound as e:
-        # The player does not exist
-        return jsonify(status=0, data=None, text="This player does not exist!")
-    except Exception as e:
-        # Server error
-        return jsonify(status=-1, data=None, text="Server error..."), 500
-    finally:
-        # Finally we release the lock
-        app.lock_connections.release()
-        print("    [ {} has released the connections lock ]".format(player_id))
-
-
-
 @app.route("/disconnect/<string:player_id>", methods=["GET"])
 def disconnect(player_id):
     """
@@ -251,24 +105,12 @@ def disconnect(player_id):
     # We look for the player and disconnect him and the connected player
     try:
         player = Player.query.get(player_id)
-        conn = player.connection
         player.in_use = 0
-        if conn is None:
-            # The player is not connected
-            return jsonify(status=1, data=None, text="Player not connected.")
-        else:
-            # We disconnect the player and the connected player
-            db_session.delete(conn)
-            if player.connection_other:
-                connected_player_conn = player.connection_other
-                connected_player_conn.connected_player_id = None
-                connected_player_conn.role = None
-                connected_player_conn.status = 0
-            db_session.commit()
-            return jsonify(status=1, data=None, text="Player disconnected.")
+        db_session.commit()
+        return jsonify(status=1, data=None, text="Player disconnected.")
     except NoResultFound as e:
         # Either the player does not exist or it has already been disconnected
-        return jsonify(status=0, data=None, text="Player not found in connections!\nEither it does not exists or it has already been disconnected.")
+        return jsonify(status=0, data=None, text="Player not found!")
     except Exception as e:
         # Server error
         return jsonify(status=-1, data=None, text="Server error..."), 500
@@ -544,7 +386,7 @@ def view_sessions_csv():
 def players():
     """Interface for managing players"""
     update_players_score()
-    sessions = [s for s in db_session.query(Player.session_nr, func.count(Player.pair)).group_by(Player.session_nr).all()]
+    sessions = [s for s in db_session.query(Player.session_nr, func.count(Player.pool)).group_by(Player.session_nr).all()]
     return render_template("players.djhtml", title="Manage players", sessions=sessions)
 
 
@@ -568,8 +410,10 @@ def view_players(session_nr):
 def update_players_score():
     """Updates the score for each player"""
     for player in db_session.query(Player).all():
+        print(player.id)
         try:
-            last_test = db_session.query(Test).join(Stat).filter(Stat.player_id==player.id).order_by(desc(Test.timestamp)).one()
+            last_test = db_session.query(Test).join(Stat).filter(Stat.player_id==player.id).order_by(desc(Test.timestamp)).first()
+            print(last_test.id, last_test.timestamp)
             score = 0
             team_score_avg = []
             team_score_max = 0
@@ -579,13 +423,14 @@ def update_players_score():
                     team_score_max = stat.score
                 if stat.player_id == player.id:
                     score = stat.score
+            print(player)
             player.score = score
             player.team_score_avg = float(sum(team_score_avg)) / len(team_score_avg)
             player.team_score_max = team_score_max
             db_session.commit()
         except Exception as e:
+            # print(e)
             pass
-
 
 @app.route("/players/create/", methods=["POST"])
 def create_players():
@@ -594,27 +439,42 @@ def create_players():
         try:
             # We check if the parameter is an even int
             number_players = int(request.form["number_players"])
-            if number_players % 2 != 0:
-                flash("Odd number of players!")
+            pool_size = int(request.form["pool_size"])
+            if pool_size < 2:
+                flash("Pool size should be of size at least 2!")
+            elif number_players % pool_size != 0:
+                flash("The number of players is not a multiple of the pool size!")
             else:
                 try:
                     # We compute the session number
                     last_session_nr = db_session.query(func.max(Player.session_nr)).one()[0]
+                    last_conn_id = db_session.query(func.max(Player.conn_id)).one()[0]
                     last_session_nr = last_session_nr if last_session_nr else 0
+                    last_conn_id = last_conn_id if last_conn_id else 0
                     session_nr = last_session_nr + 1
+                    conn_id = last_conn_id
+                    role = 0
                     for i in range(number_players):
+                        if i % pool_size == 0:
+                            conn_id += 1
+                            role = 0
+                        
                         added = False
+                        
                         # For each player we generate a random key
                         while not added:
                             try:
                                 key = '{0:06}'.format(randint(1, 1000000))
-                                db_session.add(Player(key, key, session_nr, int(i/2) + 1, 0, i%2 + 1))
+                                db_session.add(Player(key, key, session_nr, int(i/pool_size) + 1, conn_id, role, 0, i%pool_size + 1))
                                 db_session.commit()
                                 # The key did not exist and has been added
                                 added = True
                             except Exception as e:
                                 # The key already exists
                                 db_session.rollback()
+                        
+                        role = 1 # only the first player of the pool has role 0
+                        
                     flash("The players were created! The session number is {}.".format(session_nr))
                 except Exception as e:
                     # Unknown exception
