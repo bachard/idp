@@ -312,7 +312,10 @@ def add_stats_to_db(data):
     player_id = data['player']
     stats = json.loads(data['stats'])
     position_over_time = data['position_over_time']
-    solution = data['solution']
+    try:
+        solution = data['solution']
+    except:
+        solution = ""
     checkpoints = data['checkpoints']
     score = int(data['score'])
     
