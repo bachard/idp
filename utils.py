@@ -33,7 +33,7 @@ def stats_to_csv():
     stat_columns.remove("id")
     stat_columns.remove("test_id")
     stat_columns.remove("position_over_time")
-    
+
     output = StringIO()
     csvwriter = csv.writer(output, delimiter=',')
     csvwriter.writerow([c.replace("_", " ") for c in (session_columns + test_columns + stat_columns)])
@@ -51,7 +51,7 @@ def stats_to_csv():
                 stat_out = [getattr(stat, c) for c in stat_columns]
                 for item in items:
                     if item.player_id == stat.player_id:
-                        stat_out += ["Item #{} ({})".format(item.item_item, item.item.name), "used: {}".format(item.use_item), "mined: {}".format(item.mine_block), "crafted: {}".format(item.craft_item), "broken: {}".format(item.break_item)]                
+                        stat_out += ["Item #{} ({})".format(item.item_item, item.item.name), "used: {}".format(item.use_item), "mined: {}".format(item.mine_block), "crafted: {}".format(item.craft_item), "broken: {}".format(item.break_item)]
                 csvwriter.writerow(session_out + test_out + stat_out)
 
     return output
@@ -64,10 +64,10 @@ def session_to_csv(session_nr):
 
     output = StringIO()
     csvwriter = csv.writer(output, delimiter=',')
-    csvwriter.writerow(["session nr", "key", "name", "pair", "used"])
+    csvwriter.writerow(["session nr", "key", "name", "pair", "used", "score", "team score avg", "team score max"])
 
     for player in db_session.query(Player).filter_by(session_nr=session_nr).all():
-        csvwriter.writerow([player.session_nr, player.key, player.name, player.pair, player.in_use])
+        csvwriter.writerow([player.session_nr, player.key, player.name, player.pair, player.in_use, player.score, player.team_score_avg, player.team_score_max])
 
     return output
 
@@ -81,7 +81,7 @@ def session_to_allocation_file(session_nr):
     output = StringIO()
     csvwriter = csv.writer(output, delimiter='\t')
     csvwriter.writerow(["Allocation", "ID", "Team", "Condi", "PlayerCondi"])
-    
+
     for player in db_session.query(Player).filter_by(session_nr=session_nr).all():
         csvwriter.writerow(["Allocation", player.id, player.pair, player.condition, player.player_condition])
 
